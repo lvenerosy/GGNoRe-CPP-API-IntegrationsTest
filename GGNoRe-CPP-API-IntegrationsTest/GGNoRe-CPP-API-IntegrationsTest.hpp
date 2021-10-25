@@ -11,6 +11,11 @@
 
 class TEST_CPT_RB_SaveStates : public GGNoRe::API::ABS_CPT_RB_SaveStates
 {
+public:
+	TEST_CPT_RB_SaveStates(const uint16_t OwningPlayerIndex)
+		:GGNoRe::API::ABS_CPT_RB_SaveStates(OwningPlayerIndex)
+	{}
+
 protected:
 	void OnSerialize(std::vector<uint8_t>& TargetBufferOut) override {}
 	void OnDeserialize(const std::vector<uint8_t>& SourceBuffer) override {}
@@ -19,10 +24,9 @@ protected:
 class TEST_CPT_RB_Simulator : public GGNoRe::API::ABS_CPT_RB_Simulator
 {
 public:
-	TEST_CPT_RB_Simulator(const uint16_t SpawnFrameIndex)
-		:ABS_CPT_RB_Simulator(SpawnFrameIndex)
-	{
-	}
+	TEST_CPT_RB_Simulator(const uint16_t OwningPlayerIndex, const uint16_t SpawnFrameIndex)
+		:GGNoRe::API::ABS_CPT_RB_Simulator(OwningPlayerIndex, SpawnFrameIndex)
+	{}
 
 protected:
 	virtual void OnSimulateFrame(const float FrameDurationInSeconds) override {}
@@ -38,15 +42,16 @@ int main()
 {
 	GGNoRe::API::DATA_CFG::Get().LogHumanReadable("LINKER TEST");
 
-	TEST_CPT_RB_SaveStates SaveStates;
-	TEST_CPT_RB_Simulator Simulator(0);
+	const uint16_t PlayerIndex = 0;
+	TEST_CPT_RB_SaveStates SaveStates(PlayerIndex);
+	TEST_CPT_RB_Simulator Simulator(PlayerIndex, 0);
 
-	Simulator.SimulateFrame(0);
-	SaveStates.Serialize(0);
-	Simulator.SimulateFrame(1);
-	SaveStates.Serialize(1);
-	SaveStates.Deserialize(0);
-	Simulator.SimulateFrame(0);
+	Simulator.DBG_SimulateFrame(0);
+	SaveStates.DBG_Serialize(0);
+	Simulator.DBG_SimulateFrame(1);
+	SaveStates.DBG_Serialize(1);
+	SaveStates.DBG_Deserialize(0);
+	Simulator.DBG_SimulateFrame(0);
 
 	GGNoRe::API::CPT_IPT_TogglesPayload TogglesPayload;
 	const uint8_t InputToggle0 = 0;
@@ -71,7 +76,7 @@ int main()
 	TogglesPayload.PushInputAsToggle(InputToggle10);
 	TogglesPayload.PushFrameEnd();
 	TogglesPayload.LogHumanReadable("PAYLOAD");
-	CPT_IPT_Emulator Emulator;
+	CPT_IPT_Emulator Emulator(PlayerIndex);
 	Emulator.LoadNetworkStream(TogglesPayload);
 
 	return 0;
