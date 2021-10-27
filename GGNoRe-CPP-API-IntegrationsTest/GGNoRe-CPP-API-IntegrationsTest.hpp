@@ -9,6 +9,19 @@
 #include <Rollback/ABS_CPT_RB_SaveStates.hpp>
 #include <Rollback/ABS_CPT_RB_Simulator.hpp>
 
+#include <assert.h>
+
+class TEST_CPT_IPT_Emulator final : public GGNoRe::API::ABS_CPT_IPT_Emulator
+{
+public:
+	TEST_CPT_IPT_Emulator(const uint16_t OwningPlayerIndex)
+		:ABS_CPT_IPT_Emulator(OwningPlayerIndex)
+	{}
+
+protected:
+	void OnReadyToSendInputs(const std::vector<uint8_t>& BinaryPayload) const override {}
+};
+
 class TEST_CPT_RB_SaveStates final : public GGNoRe::API::ABS_CPT_RB_SaveStates
 {
 public:
@@ -33,31 +46,37 @@ protected:
 	void OnEndOfLife() override {}
 };
 
-class CPT_IPT_Emulator final : public GGNoRe::API::ABS_CPT_IPT_Emulator
-{
-public:
-	CPT_IPT_Emulator(const uint16_t OwningPlayerIndex)
-		:ABS_CPT_IPT_Emulator(OwningPlayerIndex)
-	{}
-
-protected:
-	void OnReadyToSendInputs(const std::vector<uint8_t>& BinaryPayload) const override {}
-};
-
 class IMPL_TEST_WhiteBox final : public GGNoRe::API::ABS_TEST_WhiteBox
 {
 protected:
 	bool OnRunTest() override
 	{
+		GGNoRe::API::DATA_CFG ConfigWithNoFakedDelay;
+		ConfigWithNoFakedDelay.FakedMissedPredictionsFramesCount = 0;
+		GGNoRe::API::DATA_CFG::Load(ConfigWithNoFakedDelay);
 
+		const uint16_t LocalPlayerIndex = 0;
+		const uint16_t RemotePlayerIndex = LocalPlayerIndex + 1;
+
+		TEST_CPT_IPT_Emulator LocalPlayerEmulator(LocalPlayerIndex);
+		TEST_CPT_IPT_Emulator RemotePlayerEmulator(RemotePlayerIndex);
+
+		TEST_CPT_RB_SaveStates LocalPlayerSaveStates(LocalPlayerIndex);
+		TEST_CPT_RB_SaveStates RemotePlayerSaveStates(RemotePlayerIndex);
+
+		TEST_CPT_RB_Simulator LocalPlayerSimulator(LocalPlayerIndex);
+		TEST_CPT_RB_Simulator RemotePlayerSimulator(RemotePlayerIndex);
+
+		std::vector<uint8_t> LocalPlayerMockInputs{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 };
+
+		return true;
 	}
 };
 
 int main()
 {
-	GGNoRe::API::DATA_CFG::Get().LogHumanReadable("INTEGRATION TEST");
-
-	
+	IMPL_TEST_WhiteBox WhiteBoxTester;
+	WhiteBoxTester.RunTest();
 
 	return 0;
 }
