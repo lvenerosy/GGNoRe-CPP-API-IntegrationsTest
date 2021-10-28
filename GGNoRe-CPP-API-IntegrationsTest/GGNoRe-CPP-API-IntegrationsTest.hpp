@@ -30,7 +30,13 @@ public:
 	{}
 
 protected:
-	void OnSerialize(std::vector<uint8_t>& TargetBufferOut) override {}
+	void OnSerialize(std::vector<uint8_t>& TargetBufferOut) override
+	{
+		// This should not trigger trigger rollback
+		TargetBufferOut.resize(TargetBufferOut.size() + 2);
+		const uint16_t CurrentFrameIndex = GGNoRe::API::ABS_CPT_IPT_Emulator::CurrentFrameIndex();
+		std::memcpy(TargetBufferOut.data() + TargetBufferOut.size() - 2, &CurrentFrameIndex, sizeof(uint16_t));
+	}
 	void OnDeserialize(const std::vector<uint8_t>& SourceBuffer) override {}
 };
 
@@ -46,25 +52,19 @@ protected:
 	void OnEndOfLife() override {}
 };
 
+struct GGNoRe::API::ABS_CPT_IPT_Emulator::Implementation;
+
+bool TestBasicRollback();
+
+// TODO:
+// input starved (see comment in TestBasicRollback)
+// actor lifetime
+// join mid game
+// variable framerate
+
 int main()
 {
-	GGNoRe::API::DATA_CFG ConfigWithNoFakedDelay;
-	ConfigWithNoFakedDelay.FakedMissedPredictionsFramesCount = 0;
-	GGNoRe::API::DATA_CFG::Load(ConfigWithNoFakedDelay);
-
-	const uint16_t LocalPlayerIndex = 0;
-	const uint16_t RemotePlayerIndex = LocalPlayerIndex + 1;
-
-	TEST_CPT_IPT_Emulator LocalPlayerEmulator(LocalPlayerIndex);
-	TEST_CPT_IPT_Emulator RemotePlayerEmulator(RemotePlayerIndex);
-
-	TEST_CPT_RB_SaveStates LocalPlayerSaveStates(LocalPlayerIndex);
-	TEST_CPT_RB_SaveStates RemotePlayerSaveStates(RemotePlayerIndex);
-
-	TEST_CPT_RB_Simulator LocalPlayerSimulator(LocalPlayerIndex);
-	TEST_CPT_RB_Simulator RemotePlayerSimulator(RemotePlayerIndex);
-
-	std::vector<uint8_t> LocalPlayerMockInputs{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 };
+	assert(TestBasicRollback());
 
 	return 0;
 }
