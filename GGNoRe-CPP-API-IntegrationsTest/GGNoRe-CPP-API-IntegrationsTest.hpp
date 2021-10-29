@@ -30,12 +30,20 @@ public:
 	{}
 
 protected:
+	// This mock should not trigger trigger rollback even if the inputs don't match
+	// The objective here is to always fill the buffer the same way so the checksum is consistent
 	void OnSerialize(std::vector<uint8_t>& TargetBufferOut) override
 	{
-		// This should not trigger trigger rollback
-		TargetBufferOut.resize(TargetBufferOut.size() + 2);
+		TargetBufferOut.clear();
 		const uint16_t CurrentFrameIndex = GGNoRe::API::ABS_CPT_IPT_Emulator::CurrentFrameIndex();
-		std::memcpy(TargetBufferOut.data() + TargetBufferOut.size() - 2, &CurrentFrameIndex, sizeof(uint16_t));
+		// TODO: instead of 0 use the real starting frame index
+		const uint16_t StartFrameIndex = 0;
+		// +1 because the inputs are registered after the delay
+		if (CurrentFrameIndex > StartFrameIndex + GGNoRe::API::DATA_CFG::Get().RollbackConfiguration.DelayFramesCount + 1)
+		{
+			TargetBufferOut.resize(2);
+			std::memcpy(TargetBufferOut.data() + TargetBufferOut.size() - 2, &CurrentFrameIndex, sizeof(uint16_t));
+		}
 	}
 	void OnDeserialize(const std::vector<uint8_t>& SourceBuffer) override {}
 };
