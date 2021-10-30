@@ -66,7 +66,6 @@ struct GGNoRe::API::ABS_CPT_IPT_Emulator::Implementation;
 bool TestBasicRollback();
 
 // TODO:
-// input starved (see comment in TestBasicRollback)
 // actor lifetime
 // join mid game
 // variable framerate

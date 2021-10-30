@@ -61,8 +61,9 @@ bool TestBasicRollback()
 
 	std::vector<std::set<uint8_t>> RemotePlayerMockInputTogglesBuffer{ {0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9} };
 	const uint16_t MockRunDurationInFrames = (uint16_t)RemotePlayerMockInputTogglesBuffer.size() + DelayedInputsStartFrameIndex;
-	// TODO: make sure it works to test starvation
-	const uint16_t ReceiveRemoteIntervalInFrames = 3; // If bigger than the rollback buffer, will starve
+	const uint16_t ReceiveRemoteIntervalInFrames = 3;
+	// Bigger than the rollback buffer, will starve
+	//const uint16_t ReceiveRemoteIntervalInFrames = (uint16_t)DATA_CFG::Get().RollbackBufferMaxSize() + DelayFramesCount + 1;
 
 	for (; CurrentFrameIndex < StartFrameIndex + MockRunDurationInFrames;)
 	{
@@ -99,14 +100,28 @@ bool TestBasicRollback()
 			DATA_CFG::Get().SimulationConfiguration.FrameDurationInSeconds / 2.f, SingleFrameLocalPlayerIndexToMockInputs
 		});
 
-		if (Success == ABS_CPT_IPT_Emulator::TickSuccess_E::StallAdvantage)
-		{
-			std::cout << "###########STALLING############" << std::endl;
-		}
-
 		if (Success == ABS_CPT_IPT_Emulator::TickSuccess_E::ToNext)
 		{
 			CurrentFrameIndex++;
+		}
+
+		switch (Success)
+		{
+		case ABS_CPT_IPT_Emulator::TickSuccess_E::StallAdvantage:
+			std::cout << "###########STALLING############" << std::endl;
+			break;
+		case ABS_CPT_IPT_Emulator::TickSuccess_E::StarvedForInput:
+			std::cout << "###########STARVED############" << std::endl;
+			break;
+		case ABS_CPT_IPT_Emulator::TickSuccess_E::StayCurrent:
+			std::cout << "###########STAY############" << std::endl;
+			break;
+		case ABS_CPT_IPT_Emulator::TickSuccess_E::ToNext:
+			std::cout << "###########NEXT############" << std::endl;
+			break;
+		default:
+			std::cout << "###########DEFAULT############" << std::endl;
+			break;
 		}
 	}
 
