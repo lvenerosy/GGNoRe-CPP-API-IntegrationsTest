@@ -10,6 +10,7 @@
 #include <Rollback/ABS_CPT_RB_Simulator.hpp>
 
 #include <assert.h>
+#include <iostream>
 
 class TEST_CPT_IPT_Emulator final : public GGNoRe::API::ABS_CPT_IPT_Emulator
 {

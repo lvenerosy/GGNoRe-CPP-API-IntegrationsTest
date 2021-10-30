@@ -99,6 +99,11 @@ bool TestBasicRollback()
 			DATA_CFG::Get().SimulationConfiguration.FrameDurationInSeconds / 2.f, SingleFrameLocalPlayerIndexToMockInputs
 		});
 
+		if (Success == ABS_CPT_IPT_Emulator::TickSuccess_E::StallAdvantage)
+		{
+			std::cout << "###########STALLING############" << std::endl;
+		}
+
 		if (Success == ABS_CPT_IPT_Emulator::TickSuccess_E::ToNext)
 		{
 			CurrentFrameIndex++;
