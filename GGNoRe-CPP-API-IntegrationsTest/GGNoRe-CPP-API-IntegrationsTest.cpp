@@ -17,14 +17,17 @@ bool TestBasicRollback()
 	const uint16_t LocalPlayerIndex = 0;
 	const uint16_t RemotePlayerIndex = LocalPlayerIndex + 1;
 
-	TEST_CPT_IPT_Emulator LocalPlayerEmulator(LocalPlayerIndex);
-	TEST_CPT_IPT_Emulator RemotePlayerEmulator(RemotePlayerIndex);
+	const uint16_t LocalSystemIndex = 0;
+	const uint16_t MockRemoteSystemIndex = LocalSystemIndex + 1;
 
-	TEST_CPT_RB_SaveStates LocalPlayerSaveStates(LocalPlayerIndex);
-	TEST_CPT_RB_SaveStates RemotePlayerSaveStates(RemotePlayerIndex);
+	TEST_CPT_IPT_Emulator LocalPlayerEmulator(LocalPlayerIndex, LocalSystemIndex);
+	TEST_CPT_IPT_Emulator RemotePlayerEmulator(RemotePlayerIndex, LocalSystemIndex);
 
-	TEST_CPT_RB_Simulator LocalPlayerSimulator(LocalPlayerIndex);
-	TEST_CPT_RB_Simulator RemotePlayerSimulator(RemotePlayerIndex);
+	TEST_CPT_RB_SaveStates LocalPlayerSaveStates(LocalPlayerIndex, LocalSystemIndex);
+	TEST_CPT_RB_SaveStates RemotePlayerSaveStates(RemotePlayerIndex, LocalSystemIndex);
+
+	TEST_CPT_RB_Simulator LocalPlayerSimulator(LocalPlayerIndex, LocalSystemIndex);
+	TEST_CPT_RB_Simulator RemotePlayerSimulator(RemotePlayerIndex, LocalSystemIndex);
 
 	std::map<uint16_t, std::set<uint8_t>> SingleFrameLocalPlayerIndexToMockInputs;
 	SingleFrameLocalPlayerIndexToMockInputs.emplace(std::pair<uint16_t, std::set<uint8_t>>(LocalPlayerIndex, { {0}, {1}, {2} }));
@@ -49,11 +52,11 @@ bool TestBasicRollback()
 
 	for (; CurrentFrameIndex < DelayedInputsStartFrameIndex;)
 	{
-		auto Success = ABS_CPT_IPT_Emulator::TryTickingToNextFrame({
+		auto Success = SystemMultiton::GetEmulator(LocalSystemIndex).TryTickingToNextFrame({
 			DATA_CFG::Get().SimulationConfiguration.FrameDurationInSeconds / 2.f, SingleFrameLocalPlayerIndexToMockInputs
 			});
 
-		if (Success == ABS_CPT_IPT_Emulator::TickSuccess_E::ToNext)
+		if (Success == ABS_CPT_IPT_Emulator::SINGLETON::TickSuccess_E::ToNext)
 		{
 			CurrentFrameIndex++;
 		}
@@ -93,30 +96,30 @@ bool TestBasicRollback()
 			}
 
 			// Basically a test for the binary upload/download
-			RemotePlayerEmulator.DownloadPlayerBinary(RemotePlayerEmulator.InputsToBinary(RemoteFrameIndexToVerifiableInputs).data());
+			SystemMultiton::GetEmulator(LocalSystemIndex).DownloadPlayerBinary(RemotePlayerEmulator.InputsToBinary(RemoteFrameIndexToVerifiableInputs).data());
 		}
 
-		auto Success = ABS_CPT_IPT_Emulator::TryTickingToNextFrame({
+		auto Success = SystemMultiton::GetEmulator(LocalSystemIndex).TryTickingToNextFrame({
 			DATA_CFG::Get().SimulationConfiguration.FrameDurationInSeconds / 2.f, SingleFrameLocalPlayerIndexToMockInputs
 		});
 
-		if (Success == ABS_CPT_IPT_Emulator::TickSuccess_E::ToNext)
+		if (Success == ABS_CPT_IPT_Emulator::SINGLETON::TickSuccess_E::ToNext)
 		{
 			CurrentFrameIndex++;
 		}
 
 		switch (Success)
 		{
-		case ABS_CPT_IPT_Emulator::TickSuccess_E::StallAdvantage:
+		case ABS_CPT_IPT_Emulator::SINGLETON::TickSuccess_E::StallAdvantage:
 			std::cout << "###########STALLING############" << std::endl;
 			break;
-		case ABS_CPT_IPT_Emulator::TickSuccess_E::StarvedForInput:
+		case ABS_CPT_IPT_Emulator::SINGLETON::TickSuccess_E::StarvedForInput:
 			std::cout << "###########STARVED############" << std::endl;
 			break;
-		case ABS_CPT_IPT_Emulator::TickSuccess_E::StayCurrent:
+		case ABS_CPT_IPT_Emulator::SINGLETON::TickSuccess_E::StayCurrent:
 			std::cout << "###########STAY############" << std::endl;
 			break;
-		case ABS_CPT_IPT_Emulator::TickSuccess_E::ToNext:
+		case ABS_CPT_IPT_Emulator::SINGLETON::TickSuccess_E::ToNext:
 			std::cout << "###########NEXT############" << std::endl;
 			break;
 		default:

@@ -5,6 +5,7 @@
 #pragma once
 
 #include <Core/Data/DATA_CFG.hpp>
+#include <GGNoRe-CPP-API.hpp>
 #include <Input/ABS_CPT_IPT_Emulator.hpp>
 #include <Rollback/ABS_CPT_RB_SaveStates.hpp>
 #include <Rollback/ABS_CPT_RB_Simulator.hpp>
@@ -15,8 +16,8 @@
 class TEST_CPT_IPT_Emulator final : public GGNoRe::API::ABS_CPT_IPT_Emulator
 {
 public:
-	TEST_CPT_IPT_Emulator(const uint16_t OwningPlayerIndex)
-		:ABS_CPT_IPT_Emulator(OwningPlayerIndex)
+	TEST_CPT_IPT_Emulator(const uint16_t OwningPlayerIndex, const uint8_t SystemIndex = 0)
+		:ABS_CPT_IPT_Emulator(OwningPlayerIndex, SystemIndex)
 	{}
 
 protected:
@@ -26,8 +27,8 @@ protected:
 class TEST_CPT_RB_SaveStates final : public GGNoRe::API::ABS_CPT_RB_SaveStates
 {
 public:
-	TEST_CPT_RB_SaveStates(const uint16_t OwningPlayerIndex)
-		:GGNoRe::API::ABS_CPT_RB_SaveStates(OwningPlayerIndex)
+	TEST_CPT_RB_SaveStates(const uint16_t OwningPlayerIndex, const uint8_t SystemIndex = 0)
+		:GGNoRe::API::ABS_CPT_RB_SaveStates(OwningPlayerIndex, SystemIndex)
 	{}
 
 protected:
@@ -36,7 +37,7 @@ protected:
 	void OnSerialize(std::vector<uint8_t>& TargetBufferOut) override
 	{
 		TargetBufferOut.clear();
-		const uint16_t CurrentFrameIndex = GGNoRe::API::ABS_CPT_IPT_Emulator::CurrentFrameIndex();
+		const uint16_t CurrentFrameIndex = GGNoRe::API::SystemMultiton::GetEmulator(GetSystemIndex()).CurrentFrameIndex();
 		// TODO: instead of 0 use the real starting frame index
 		const uint16_t StartFrameIndex = 0;
 		// +1 because the inputs are registered after the delay
@@ -52,8 +53,8 @@ protected:
 class TEST_CPT_RB_Simulator final : public GGNoRe::API::ABS_CPT_RB_Simulator
 {
 public:
-	TEST_CPT_RB_Simulator(const uint16_t OwningPlayerIndex)
-		:GGNoRe::API::ABS_CPT_RB_Simulator(OwningPlayerIndex)
+	TEST_CPT_RB_Simulator(const uint16_t OwningPlayerIndex, const uint8_t SystemIndex = 0)
+		:GGNoRe::API::ABS_CPT_RB_Simulator(OwningPlayerIndex, SystemIndex)
 	{}
 
 protected:
