@@ -83,7 +83,7 @@ bool TestBasicRollback()
 						{
 							// TODO: fix the index so it starts from the beginning of the buffer
 							RemotePlayerMockInputTogglesBuffer[RemoteFrameIndexDelayedByLocalAdvantage - StartFrameIndex],
-							ABS_CPT_RB_SaveStates::ComputeChecksum(RemoteFrameIndexDelayedByLocalAdvantage),
+							SystemMultiton::GetSaveStates(LocalSystemIndex).ComputeChecksum(RemoteFrameIndexDelayedByLocalAdvantage),
 							false
 						}
 					)
