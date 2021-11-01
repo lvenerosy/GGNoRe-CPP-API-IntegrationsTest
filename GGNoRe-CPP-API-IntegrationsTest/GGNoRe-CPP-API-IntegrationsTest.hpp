@@ -11,23 +11,29 @@
 #include <Rollback/ABS_CPT_RB_Simulator.hpp>
 
 #include <assert.h>
+#include <functional>
 #include <iostream>
 
 class TEST_CPT_IPT_Emulator final : public GGNoRe::API::ABS_CPT_IPT_Emulator
 {
 public:
-	TEST_CPT_IPT_Emulator(const uint16_t OwningPlayerIndex, const uint8_t SystemIndex = 0)
+	TEST_CPT_IPT_Emulator(const uint16_t OwningPlayerIndex, const uint8_t SystemIndex)
 		:ABS_CPT_IPT_Emulator(OwningPlayerIndex, SystemIndex)
 	{}
 
+	std::function<void(const std::vector<uint8_t>&)> DownloadInputs;
+
 protected:
-	void OnReadyToSendInputs(const std::vector<uint8_t>& BinaryPayload) const override {}
+	void OnReadyToSendInputs(const std::vector<uint8_t>& BinaryPayload) const override
+	{
+		DownloadInputs(BinaryPayload);
+	}
 };
 
 class TEST_CPT_RB_SaveStates final : public GGNoRe::API::ABS_CPT_RB_SaveStates
 {
 public:
-	TEST_CPT_RB_SaveStates(const uint16_t OwningPlayerIndex, const uint8_t SystemIndex = 0)
+	TEST_CPT_RB_SaveStates(const uint16_t OwningPlayerIndex, const uint8_t SystemIndex)
 		:GGNoRe::API::ABS_CPT_RB_SaveStates(OwningPlayerIndex, SystemIndex)
 	{}
 
@@ -39,9 +45,9 @@ protected:
 		TargetBufferOut.clear();
 		const uint16_t CurrentFrameIndex = GGNoRe::API::SystemMultiton::GetEmulator(GetSystemIndex()).CurrentFrameIndex();
 		// TODO: instead of 0 use the real starting frame index
-		const uint16_t StartFrameIndex = 0;
+		//const uint16_t StartFrameIndex = 0;
 		// +1 because the inputs are registered after the delay
-		if (CurrentFrameIndex > StartFrameIndex + GGNoRe::API::DATA_CFG::Get().RollbackConfiguration.DelayFramesCount + 1)
+		//if (CurrentFrameIndex > StartFrameIndex + GGNoRe::API::DATA_CFG::Get().RollbackConfiguration.DelayFramesCount + 1)
 		{
 			TargetBufferOut.resize(2);
 			std::memcpy(TargetBufferOut.data() + TargetBufferOut.size() - 2, &CurrentFrameIndex, sizeof(uint16_t));
@@ -53,7 +59,7 @@ protected:
 class TEST_CPT_RB_Simulator final : public GGNoRe::API::ABS_CPT_RB_Simulator
 {
 public:
-	TEST_CPT_RB_Simulator(const uint16_t OwningPlayerIndex, const uint8_t SystemIndex = 0)
+	TEST_CPT_RB_Simulator(const uint16_t OwningPlayerIndex, const uint8_t SystemIndex)
 		:GGNoRe::API::ABS_CPT_RB_Simulator(OwningPlayerIndex, SystemIndex)
 	{}
 
@@ -64,7 +70,7 @@ protected:
 
 struct GGNoRe::API::ABS_CPT_IPT_Emulator::Implementation;
 
-bool TestBasicRollback();
+bool TestRemoteMockRollback();
 
 // TODO:
 // actor lifetime
@@ -73,7 +79,7 @@ bool TestBasicRollback();
 
 int main()
 {
-	assert(TestBasicRollback());
+	assert(TestRemoteMockRollback());
 
 	return 0;
 }

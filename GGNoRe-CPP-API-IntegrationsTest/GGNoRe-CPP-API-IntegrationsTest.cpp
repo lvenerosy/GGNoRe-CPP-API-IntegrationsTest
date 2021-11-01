@@ -4,127 +4,101 @@
 
 #include <GGNoRe-CPP-API-IntegrationsTest.hpp>
 
-#include <Input/IPT_VerifiableInputs_STRC.hpp>
-
 using namespace GGNoRe::API;
 
-bool TestBasicRollback()
+void LogSuccess(ABS_CPT_IPT_Emulator::SINGLETON::TickSuccess_E Success, std::string SystemName)
+{
+	switch (Success)
+	{
+	case ABS_CPT_IPT_Emulator::SINGLETON::TickSuccess_E::StallAdvantage:
+		std::cout << "###########" + SystemName + " STALLING############" << std::endl;
+			break;
+	case ABS_CPT_IPT_Emulator::SINGLETON::TickSuccess_E::StarvedForInput:
+		std::cout << "###########" + SystemName + " STARVED############" << std::endl;
+			break;
+	case ABS_CPT_IPT_Emulator::SINGLETON::TickSuccess_E::StayCurrent:
+		std::cout << "###########" + SystemName + " STAY############" << std::endl;
+			break;
+	case ABS_CPT_IPT_Emulator::SINGLETON::TickSuccess_E::ToNext:
+		std::cout << "###########" + SystemName + " NEXT############" << std::endl;
+			break;
+	default:
+		std::cout << "###########" + SystemName + " DEFAULT############" << std::endl;
+		break;
+	}
+}
+
+bool TestRemoteMockRollback()
 {
 	DATA_CFG ConfigWithNoFakedDelay;
 	ConfigWithNoFakedDelay.FakedMissedPredictionsFramesCount = 0; // Comment out to use the fake rollback
 	DATA_CFG::Load(ConfigWithNoFakedDelay);
 
-	const uint16_t LocalPlayerIndex = 0;
-	const uint16_t RemotePlayerIndex = LocalPlayerIndex + 1;
+	const uint16_t Player1Index = 0;
+	const uint16_t Player2Index = Player1Index + 1;
 
-	const uint16_t LocalSystemIndex = 0;
-	const uint16_t MockRemoteSystemIndex = LocalSystemIndex + 1;
+	const uint8_t LocalSystemIndex = 0;
+	const uint8_t MockRemoteSystemIndex = LocalSystemIndex + 1;
 
-	TEST_CPT_IPT_Emulator LocalPlayerEmulator(LocalPlayerIndex, LocalSystemIndex);
-	TEST_CPT_IPT_Emulator RemotePlayerEmulator(RemotePlayerIndex, LocalSystemIndex);
+	const uint16_t StartFrameIndex = 0;
+	const uint16_t ReceiveRemoteIntervalInFrames = 3;
+	const uint16_t FrameAdvantageInFrames = 2;
+	const size_t MockIterationsCount = 120;
 
-	TEST_CPT_RB_SaveStates LocalPlayerSaveStates(LocalPlayerIndex, LocalSystemIndex);
-	TEST_CPT_RB_SaveStates RemotePlayerSaveStates(RemotePlayerIndex, LocalSystemIndex);
+	SystemMultiton::GetEmulator(LocalSystemIndex).SyncWithRemoteFrameIndex(StartFrameIndex);
+	SystemMultiton::GetEmulator(MockRemoteSystemIndex).SyncWithRemoteFrameIndex(StartFrameIndex);
 
-	TEST_CPT_RB_Simulator LocalPlayerSimulator(LocalPlayerIndex, LocalSystemIndex);
-	TEST_CPT_RB_Simulator RemotePlayerSimulator(RemotePlayerIndex, LocalSystemIndex);
+	TEST_CPT_IPT_Emulator TrueLocalPlayer1Emulator(Player1Index, LocalSystemIndex);
+	TEST_CPT_IPT_Emulator LocalPlayer2Emulator(Player2Index, LocalSystemIndex);
+	TEST_CPT_RB_SaveStates TrueLocalPlayer1SaveStates(Player1Index, LocalSystemIndex);
+	TEST_CPT_RB_SaveStates LocalPlayer2SaveStates(Player2Index, LocalSystemIndex);
+	TEST_CPT_RB_Simulator TrueLocalPlayer1Simulator(Player1Index, LocalSystemIndex);
+	TEST_CPT_RB_Simulator LocalPlayer2Simulator(Player2Index, LocalSystemIndex);
+
+	TEST_CPT_IPT_Emulator RemotePlayer1Emulator(Player1Index, MockRemoteSystemIndex);
+	TEST_CPT_IPT_Emulator TrueRemotePlayer2Emulator(Player2Index, MockRemoteSystemIndex);
+	TEST_CPT_RB_SaveStates RemotePlayer1SaveStates(Player1Index, MockRemoteSystemIndex);
+	TEST_CPT_RB_SaveStates TrueRemotePlayer2SaveStates(Player2Index, MockRemoteSystemIndex);
+	TEST_CPT_RB_Simulator RemotePlayer1Simulator(Player1Index, MockRemoteSystemIndex);
+	TEST_CPT_RB_Simulator TrueRemotePlayer2Simulator(Player2Index, MockRemoteSystemIndex);
+
+	uint16_t MockIterationIndex = StartFrameIndex;
+
+	TrueLocalPlayer1Emulator.DownloadInputs = [&](const std::vector<uint8_t>& BinaryPayload)
+	{
+		SystemMultiton::GetEmulator(MockRemoteSystemIndex).DownloadPlayerBinary(BinaryPayload.data());
+	};
+
+	TrueRemotePlayer2Emulator.DownloadInputs = [&](const std::vector<uint8_t>& BinaryPayload)
+	{
+		if (MockIterationIndex >= StartFrameIndex + FrameAdvantageInFrames)
+		{
+			if (MockIterationIndex % ReceiveRemoteIntervalInFrames == 0)
+			{
+				SystemMultiton::GetEmulator(LocalSystemIndex).DownloadPlayerBinary(BinaryPayload.data());
+			}
+		}
+	};
 
 	std::map<uint16_t, std::set<uint8_t>> SingleFrameLocalPlayerIndexToMockInputs;
-	SingleFrameLocalPlayerIndexToMockInputs.emplace(std::pair<uint16_t, std::set<uint8_t>>(LocalPlayerIndex, { {0}, {1}, {2} }));
+	SingleFrameLocalPlayerIndexToMockInputs.emplace(std::pair<uint16_t, std::set<uint8_t>>(Player1Index, { {0}, {1}, {2} }));
 
-	const uint16_t DelayFramesCount = (uint16_t)DATA_CFG::Get().RollbackConfiguration.DelayFramesCount;
-	const uint16_t StartFrameIndex = 0;
+	std::map<uint16_t, std::set<uint8_t>> SingleFrameRemotePlayerIndexToMockInputs;
+	SingleFrameRemotePlayerIndexToMockInputs.emplace(std::pair<uint16_t, std::set<uint8_t>>(Player2Index, { {3}, {2}, {1} }));
 
-	std::map<uint16_t, IPT_VerifiableInputs_STRC> RemoteFrameIndexToVerifiableInputs;
-	// In the real use case of VerifiableBuffer, for the delay frame count + 1, the inputs are initialized to empty since the player interaction is stored for the future
-	for (uint16_t InitialFrameIndex = StartFrameIndex; InitialFrameIndex < StartFrameIndex + DelayFramesCount + 1; InitialFrameIndex++)
+	for (; MockIterationIndex < StartFrameIndex + MockIterationsCount; MockIterationIndex++)
 	{
-		// Add remote inputs manually as if they came from the internet
-		RemoteFrameIndexToVerifiableInputs.emplace(
-			std::pair<uint16_t, IPT_VerifiableInputs_STRC>(InitialFrameIndex, { {}, 0, false })
-		);
-	}
-
-	const uint16_t FrameAdvantageInFrames = 2;
-	const uint16_t DelayedInputsStartFrameIndex = StartFrameIndex + DelayFramesCount + 1;
-
-	uint16_t CurrentFrameIndex = StartFrameIndex;
-
-	for (; CurrentFrameIndex < DelayedInputsStartFrameIndex;)
-	{
-		auto Success = SystemMultiton::GetEmulator(LocalSystemIndex).TryTickingToNextFrame({
-			DATA_CFG::Get().SimulationConfiguration.FrameDurationInSeconds / 2.f, SingleFrameLocalPlayerIndexToMockInputs
-			});
-
-		if (Success == ABS_CPT_IPT_Emulator::SINGLETON::TickSuccess_E::ToNext)
-		{
-			CurrentFrameIndex++;
-		}
-	}
-
-	std::vector<std::set<uint8_t>> RemotePlayerMockInputTogglesBuffer{ {0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9} };
-	const uint16_t MockRunDurationInFrames = (uint16_t)RemotePlayerMockInputTogglesBuffer.size() + DelayedInputsStartFrameIndex;
-	const uint16_t ReceiveRemoteIntervalInFrames = 3;
-	// Bigger than the rollback buffer, will starve
-	//const uint16_t ReceiveRemoteIntervalInFrames = (uint16_t)DATA_CFG::Get().RollbackBufferMaxSize() + DelayFramesCount + 1;
-
-	for (; CurrentFrameIndex < StartFrameIndex + MockRunDurationInFrames;)
-	{
-		// Every ReceiveRemoteIntervalInFrames frames
-		if (CurrentFrameIndex % ReceiveRemoteIntervalInFrames == 0 && CurrentFrameIndex - FrameAdvantageInFrames > ReceiveRemoteIntervalInFrames)
-		{
-			for (uint16_t RemoteFrameIndexOffset = 0; RemoteFrameIndexOffset < ReceiveRemoteIntervalInFrames; RemoteFrameIndexOffset++)
-			{
-				const uint16_t RemoteFrameIndexDelayedByLocalAdvantage = RemoteFrameIndexOffset + CurrentFrameIndex - ReceiveRemoteIntervalInFrames - FrameAdvantageInFrames;
-				// Add remote inputs manually as if they came from the internet
-				RemoteFrameIndexToVerifiableInputs.emplace(
-					std::pair<uint16_t, IPT_VerifiableInputs_STRC>(
-						RemoteFrameIndexDelayedByLocalAdvantage,
-						{
-							// TODO: fix the index so it starts from the beginning of the buffer
-							RemotePlayerMockInputTogglesBuffer[RemoteFrameIndexDelayedByLocalAdvantage - StartFrameIndex],
-							SystemMultiton::GetSaveStates(LocalSystemIndex).ComputeChecksum(RemoteFrameIndexDelayedByLocalAdvantage),
-							false
-						}
-					)
-				);
-
-				if (RemoteFrameIndexToVerifiableInputs.size() > DATA_CFG::Get().RollbackInputBufferMaxSize())
-				{
-					RemoteFrameIndexToVerifiableInputs.erase(RemoteFrameIndexToVerifiableInputs.begin());
-				}
-			}
-
-			// Basically a test for the binary upload/download
-			SystemMultiton::GetEmulator(LocalSystemIndex).DownloadPlayerBinary(RemotePlayerEmulator.InputsToBinary(RemoteFrameIndexToVerifiableInputs).data());
-		}
-
-		auto Success = SystemMultiton::GetEmulator(LocalSystemIndex).TryTickingToNextFrame({
+		auto LocalSuccess = SystemMultiton::GetEmulator(LocalSystemIndex).TryTickingToNextFrame({
 			DATA_CFG::Get().SimulationConfiguration.FrameDurationInSeconds / 2.f, SingleFrameLocalPlayerIndexToMockInputs
 		});
+		LogSuccess(LocalSuccess, "LOCAL");
 
-		if (Success == ABS_CPT_IPT_Emulator::SINGLETON::TickSuccess_E::ToNext)
+		if (MockIterationIndex >= StartFrameIndex + FrameAdvantageInFrames)
 		{
-			CurrentFrameIndex++;
-		}
-
-		switch (Success)
-		{
-		case ABS_CPT_IPT_Emulator::SINGLETON::TickSuccess_E::StallAdvantage:
-			std::cout << "###########STALLING############" << std::endl;
-			break;
-		case ABS_CPT_IPT_Emulator::SINGLETON::TickSuccess_E::StarvedForInput:
-			std::cout << "###########STARVED############" << std::endl;
-			break;
-		case ABS_CPT_IPT_Emulator::SINGLETON::TickSuccess_E::StayCurrent:
-			std::cout << "###########STAY############" << std::endl;
-			break;
-		case ABS_CPT_IPT_Emulator::SINGLETON::TickSuccess_E::ToNext:
-			std::cout << "###########NEXT############" << std::endl;
-			break;
-		default:
-			std::cout << "###########DEFAULT############" << std::endl;
-			break;
+			auto RemoteSuccess = SystemMultiton::GetEmulator(MockRemoteSystemIndex).TryTickingToNextFrame({
+				DATA_CFG::Get().SimulationConfiguration.FrameDurationInSeconds / 2.f, SingleFrameRemotePlayerIndexToMockInputs
+			});
+			LogSuccess(RemoteSuccess, "REMOTE");
 		}
 	}
 
