@@ -4,7 +4,78 @@
 
 #include <GGNoRe-CPP-API-IntegrationsTest.hpp>
 
+#include <GGNoRe-CPP-API.hpp>
+
+#include <functional>
+#include <iostream>
+
 using namespace GGNoRe::API;
+
+class TEST_CPT_IPT_Emulator final : public ABS_CPT_IPT_Emulator
+{
+public:
+	TEST_CPT_IPT_Emulator(const uint16_t OwningPlayerIndex, const uint8_t SystemIndex)
+		:ABS_CPT_IPT_Emulator(OwningPlayerIndex, SystemIndex)
+	{}
+
+	std::function<void(const std::vector<uint8_t>&)> DownloadInputs;
+
+protected:
+	void OnReadyToSendInputs(const std::vector<uint8_t>& BinaryPayload) const override
+	{
+		DownloadInputs(BinaryPayload);
+	}
+};
+
+class TEST_CPT_RB_Simulator;
+class TEST_CPT_RB_SaveStates final : public ABS_CPT_RB_SaveStates
+{
+	friend class TEST_CPT_RB_Simulator;
+	uint8_t Counter = 0;
+public:
+	TEST_CPT_RB_SaveStates(const uint16_t OwningPlayerIndex, const uint8_t SystemIndex)
+		:ABS_CPT_RB_SaveStates(OwningPlayerIndex, SystemIndex)
+	{}
+
+protected:
+	// This mock should not trigger trigger rollback even if the inputs don't match
+	// The objective here is to always fill the buffer the same way so the checksum is consistent
+	void OnSerialize(std::vector<uint8_t>& TargetBufferOut) override
+	{
+		TargetBufferOut.clear();
+		// TODO: instead of 0 use the real starting frame index
+		//const uint16_t StartFrameIndex = 0;
+		// +1 because the inputs are registered after the delay
+		//if (CurrentFrameIndex > StartFrameIndex + DATA_CFG::Get().RollbackConfiguration.DelayFramesCount + 1)
+		{
+			TargetBufferOut.push_back(Counter);
+		}
+	}
+	void OnDeserialize(const std::vector<uint8_t>& SourceBuffer) override
+	{
+		if (SourceBuffer.size() == 1)
+		{
+			Counter = SourceBuffer[0];
+		}
+	}
+};
+
+class TEST_CPT_RB_Simulator final : public ABS_CPT_RB_Simulator
+{
+	TEST_CPT_RB_SaveStates& SaveStates;
+public:
+	TEST_CPT_RB_Simulator(const uint16_t OwningPlayerIndex, const uint8_t SystemIndex, TEST_CPT_RB_SaveStates& SaveStates)
+		:ABS_CPT_RB_Simulator(OwningPlayerIndex, SystemIndex), SaveStates(SaveStates)
+	{}
+
+protected:
+	void OnSimulateFrame(const float FrameDurationInSeconds, const std::set<uint8_t>& Inputs) override
+	{
+		SaveStates.Counter++;
+	}
+
+	void OnEndOfLife() override {}
+};
 
 void LogSuccess(ABS_CPT_IPT_Emulator::SINGLETON::TickSuccess_E Success, std::string SystemName)
 {
@@ -41,26 +112,26 @@ bool TestRemoteMockRollback()
 	const uint8_t MockRemoteSystemIndex = LocalSystemIndex + 1;
 
 	const uint16_t StartFrameIndex = 0;
-	const uint16_t ReceiveRemoteIntervalInFrames = 3;
+	const uint16_t ReceiveRemoteIntervalInFrames = 2;
 	const uint16_t FrameAdvantageInFrames = 2;
 	const size_t MockIterationsCount = 120;
 
-	SystemMultiton::GetEmulator(LocalSystemIndex).SyncWithRemoteFrameIndex(StartFrameIndex);
-	SystemMultiton::GetEmulator(MockRemoteSystemIndex).SyncWithRemoteFrameIndex(StartFrameIndex);
+	//SystemMultiton::GetEmulator(LocalSystemIndex).SyncWithRemoteFrameIndex(StartFrameIndex);
+	//SystemMultiton::GetEmulator(MockRemoteSystemIndex).SyncWithRemoteFrameIndex(StartFrameIndex);
 
 	TEST_CPT_IPT_Emulator TrueLocalPlayer1Emulator(Player1Index, LocalSystemIndex);
 	TEST_CPT_IPT_Emulator LocalPlayer2Emulator(Player2Index, LocalSystemIndex);
 	TEST_CPT_RB_SaveStates TrueLocalPlayer1SaveStates(Player1Index, LocalSystemIndex);
 	TEST_CPT_RB_SaveStates LocalPlayer2SaveStates(Player2Index, LocalSystemIndex);
-	TEST_CPT_RB_Simulator TrueLocalPlayer1Simulator(Player1Index, LocalSystemIndex);
-	TEST_CPT_RB_Simulator LocalPlayer2Simulator(Player2Index, LocalSystemIndex);
+	TEST_CPT_RB_Simulator TrueLocalPlayer1Simulator(Player1Index, LocalSystemIndex, TrueLocalPlayer1SaveStates);
+	TEST_CPT_RB_Simulator LocalPlayer2Simulator(Player2Index, LocalSystemIndex, LocalPlayer2SaveStates);
 
 	TEST_CPT_IPT_Emulator RemotePlayer1Emulator(Player1Index, MockRemoteSystemIndex);
 	TEST_CPT_IPT_Emulator TrueRemotePlayer2Emulator(Player2Index, MockRemoteSystemIndex);
 	TEST_CPT_RB_SaveStates RemotePlayer1SaveStates(Player1Index, MockRemoteSystemIndex);
 	TEST_CPT_RB_SaveStates TrueRemotePlayer2SaveStates(Player2Index, MockRemoteSystemIndex);
-	TEST_CPT_RB_Simulator RemotePlayer1Simulator(Player1Index, MockRemoteSystemIndex);
-	TEST_CPT_RB_Simulator TrueRemotePlayer2Simulator(Player2Index, MockRemoteSystemIndex);
+	TEST_CPT_RB_Simulator RemotePlayer1Simulator(Player1Index, MockRemoteSystemIndex, RemotePlayer1SaveStates);
+	TEST_CPT_RB_Simulator TrueRemotePlayer2Simulator(Player2Index, MockRemoteSystemIndex, TrueRemotePlayer2SaveStates);
 
 	uint16_t MockIterationIndex = StartFrameIndex;
 
