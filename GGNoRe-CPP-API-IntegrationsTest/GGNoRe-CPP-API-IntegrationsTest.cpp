@@ -8,6 +8,7 @@
 
 #include <functional>
 #include <iostream>
+#include <stdlib.h>
 
 using namespace GGNoRe::API;
 
@@ -112,8 +113,8 @@ bool TestRemoteMockRollback()
 	const uint8_t MockRemoteSystemIndex = LocalSystemIndex + 1;
 
 	const uint16_t StartFrameIndex = 0;
-	const uint16_t ReceiveRemoteIntervalInFrames = 2;
-	const uint16_t FrameAdvantageInFrames = 2;
+	const uint16_t ReceiveRemoteIntervalInFrames = 3;
+	const uint16_t FrameAdvantageInFrames = 4;
 	const size_t MockIterationsCount = 120;
 
 	//SystemMultiton::GetEmulator(LocalSystemIndex).SyncWithRemoteFrameIndex(StartFrameIndex);
@@ -140,16 +141,20 @@ bool TestRemoteMockRollback()
 		SystemMultiton::GetEmulator(MockRemoteSystemIndex).DownloadPlayerBinary(BinaryPayload.data());
 	};
 
+	const uint16_t FrameDurationDivider = 2;
+
 	TrueRemotePlayer2Emulator.DownloadInputs = [&](const std::vector<uint8_t>& BinaryPayload)
 	{
-		if (MockIterationIndex >= StartFrameIndex + FrameAdvantageInFrames)
+		if (MockIterationIndex * FrameDurationDivider >= StartFrameIndex + FrameAdvantageInFrames)
 		{
-			if (MockIterationIndex % ReceiveRemoteIntervalInFrames == 0)
+			if (MockIterationIndex * FrameDurationDivider % ReceiveRemoteIntervalInFrames == 0)
 			{
 				SystemMultiton::GetEmulator(LocalSystemIndex).DownloadPlayerBinary(BinaryPayload.data());
 			}
 		}
 	};
+
+	srand(0);
 
 	std::map<uint16_t, std::set<uint8_t>> SingleFrameLocalPlayerIndexToMockInputs;
 	SingleFrameLocalPlayerIndexToMockInputs.emplace(std::pair<uint16_t, std::set<uint8_t>>(Player1Index, { {0}, {1}, {2} }));
@@ -160,17 +165,20 @@ bool TestRemoteMockRollback()
 	for (; MockIterationIndex < StartFrameIndex + MockIterationsCount; MockIterationIndex++)
 	{
 		auto LocalSuccess = SystemMultiton::GetEmulator(LocalSystemIndex).TryTickingToNextFrame({
-			DATA_CFG::Get().SimulationConfiguration.FrameDurationInSeconds / 2.f, SingleFrameLocalPlayerIndexToMockInputs
+			DATA_CFG::Get().SimulationConfiguration.FrameDurationInSeconds / FrameDurationDivider, SingleFrameLocalPlayerIndexToMockInputs
 		});
 		LogSuccess(LocalSuccess, "LOCAL");
 
-		if (MockIterationIndex >= StartFrameIndex + FrameAdvantageInFrames)
+		if (MockIterationIndex * FrameDurationDivider >= StartFrameIndex + FrameAdvantageInFrames)
 		{
 			auto RemoteSuccess = SystemMultiton::GetEmulator(MockRemoteSystemIndex).TryTickingToNextFrame({
-				DATA_CFG::Get().SimulationConfiguration.FrameDurationInSeconds / 2.f, SingleFrameRemotePlayerIndexToMockInputs
+				DATA_CFG::Get().SimulationConfiguration.FrameDurationInSeconds / FrameDurationDivider, SingleFrameRemotePlayerIndexToMockInputs
 			});
 			LogSuccess(RemoteSuccess, "REMOTE");
 		}
+
+		//SingleFrameLocalPlayerIndexToMockInputs[Player1Index] = { {(uint8_t)(rand() % CPT_IPT_TogglesPayload::MaxInputToken())} };
+		//SingleFrameRemotePlayerIndexToMockInputs[Player2Index] = { {(uint8_t)(rand() % CPT_IPT_TogglesPayload::MaxInputToken())} };
 	}
 
 	return true;
