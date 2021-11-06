@@ -15,8 +15,8 @@ using namespace GGNoRe::API;
 class TEST_CPT_IPT_Emulator final : public ABS_CPT_IPT_Emulator
 {
 public:
-	TEST_CPT_IPT_Emulator(const uint16_t OwningPlayerIndex, const uint8_t SystemIndex)
-		:ABS_CPT_IPT_Emulator(OwningPlayerIndex, SystemIndex)
+	TEST_CPT_IPT_Emulator(const id_t OwningPlayerId, const uint8_t SystemIndex)
+		:ABS_CPT_IPT_Emulator(OwningPlayerId, SystemIndex)
 	{}
 
 	std::function<void(const std::vector<uint8_t>&)> DownloadInputs;
@@ -34,8 +34,8 @@ class TEST_CPT_RB_SaveStates final : public ABS_CPT_RB_SaveStates
 	friend class TEST_CPT_RB_Simulator;
 	uint8_t Counter = 0;
 public:
-	TEST_CPT_RB_SaveStates(const uint16_t OwningPlayerIndex, const uint8_t SystemIndex)
-		:ABS_CPT_RB_SaveStates(OwningPlayerIndex, SystemIndex)
+	TEST_CPT_RB_SaveStates(const id_t OwningPlayerId, const uint8_t SystemIndex)
+		:ABS_CPT_RB_SaveStates(OwningPlayerId, SystemIndex)
 	{}
 
 protected:
@@ -65,8 +65,8 @@ class TEST_CPT_RB_Simulator final : public ABS_CPT_RB_Simulator
 {
 	TEST_CPT_RB_SaveStates& SaveStates;
 public:
-	TEST_CPT_RB_Simulator(const uint16_t OwningPlayerIndex, const uint8_t SystemIndex, TEST_CPT_RB_SaveStates& SaveStates)
-		:ABS_CPT_RB_Simulator(OwningPlayerIndex, SystemIndex), SaveStates(SaveStates)
+	TEST_CPT_RB_Simulator(const id_t OwningPlayerId, const uint8_t SystemIndex, TEST_CPT_RB_SaveStates& SaveStates)
+		:ABS_CPT_RB_Simulator(OwningPlayerId, SystemIndex), SaveStates(SaveStates)
 	{}
 
 protected:
@@ -106,8 +106,8 @@ bool TestRemoteMockRollback()
 	ConfigWithNoFakedDelay.FakedMissedPredictionsFramesCount = 0; // Comment out to use the fake rollback
 	DATA_CFG::Load(ConfigWithNoFakedDelay);
 
-	const uint16_t Player1Index = 0;
-	const uint16_t Player2Index = Player1Index + 1;
+	const id_t Player1Id;
+	const id_t Player2Id = Player1Id + 1;
 
 	const uint8_t LocalSystemIndex = 0;
 	const uint8_t MockRemoteSystemIndex = LocalSystemIndex + 1;
@@ -120,19 +120,19 @@ bool TestRemoteMockRollback()
 	//SystemMultiton::GetEmulator(LocalSystemIndex).SyncWithRemoteFrameIndex(StartFrameIndex);
 	//SystemMultiton::GetEmulator(MockRemoteSystemIndex).SyncWithRemoteFrameIndex(StartFrameIndex);
 
-	TEST_CPT_IPT_Emulator TrueLocalPlayer1Emulator(Player1Index, LocalSystemIndex);
-	TEST_CPT_IPT_Emulator LocalPlayer2Emulator(Player2Index, LocalSystemIndex);
-	TEST_CPT_RB_SaveStates TrueLocalPlayer1SaveStates(Player1Index, LocalSystemIndex);
-	TEST_CPT_RB_SaveStates LocalPlayer2SaveStates(Player2Index, LocalSystemIndex);
-	TEST_CPT_RB_Simulator TrueLocalPlayer1Simulator(Player1Index, LocalSystemIndex, TrueLocalPlayer1SaveStates);
-	TEST_CPT_RB_Simulator LocalPlayer2Simulator(Player2Index, LocalSystemIndex, LocalPlayer2SaveStates);
+	TEST_CPT_IPT_Emulator TrueLocalPlayer1Emulator(Player1Id, LocalSystemIndex);
+	TEST_CPT_IPT_Emulator LocalPlayer2Emulator(Player2Id, LocalSystemIndex);
+	TEST_CPT_RB_SaveStates TrueLocalPlayer1SaveStates(Player1Id, LocalSystemIndex);
+	TEST_CPT_RB_SaveStates LocalPlayer2SaveStates(Player2Id, LocalSystemIndex);
+	TEST_CPT_RB_Simulator TrueLocalPlayer1Simulator(Player1Id, LocalSystemIndex, TrueLocalPlayer1SaveStates);
+	TEST_CPT_RB_Simulator LocalPlayer2Simulator(Player2Id, LocalSystemIndex, LocalPlayer2SaveStates);
 
-	TEST_CPT_IPT_Emulator RemotePlayer1Emulator(Player1Index, MockRemoteSystemIndex);
-	TEST_CPT_IPT_Emulator TrueRemotePlayer2Emulator(Player2Index, MockRemoteSystemIndex);
-	TEST_CPT_RB_SaveStates RemotePlayer1SaveStates(Player1Index, MockRemoteSystemIndex);
-	TEST_CPT_RB_SaveStates TrueRemotePlayer2SaveStates(Player2Index, MockRemoteSystemIndex);
-	TEST_CPT_RB_Simulator RemotePlayer1Simulator(Player1Index, MockRemoteSystemIndex, RemotePlayer1SaveStates);
-	TEST_CPT_RB_Simulator TrueRemotePlayer2Simulator(Player2Index, MockRemoteSystemIndex, TrueRemotePlayer2SaveStates);
+	TEST_CPT_IPT_Emulator RemotePlayer1Emulator(Player1Id, MockRemoteSystemIndex);
+	TEST_CPT_IPT_Emulator TrueRemotePlayer2Emulator(Player2Id, MockRemoteSystemIndex);
+	TEST_CPT_RB_SaveStates RemotePlayer1SaveStates(Player1Id, MockRemoteSystemIndex);
+	TEST_CPT_RB_SaveStates TrueRemotePlayer2SaveStates(Player2Id, MockRemoteSystemIndex);
+	TEST_CPT_RB_Simulator RemotePlayer1Simulator(Player1Id, MockRemoteSystemIndex, RemotePlayer1SaveStates);
+	TEST_CPT_RB_Simulator TrueRemotePlayer2Simulator(Player2Id, MockRemoteSystemIndex, TrueRemotePlayer2SaveStates);
 
 	uint16_t MockIterationIndex = StartFrameIndex;
 
@@ -156,29 +156,29 @@ bool TestRemoteMockRollback()
 
 	srand(0);
 
-	std::map<uint16_t, std::set<uint8_t>> SingleFrameLocalPlayerIndexToMockInputs;
-	SingleFrameLocalPlayerIndexToMockInputs.emplace(std::pair<uint16_t, std::set<uint8_t>>(Player1Index, { {0}, {1}, {2} }));
+	std::map<id_t, std::set<uint8_t>> SingleFrameLocalPlayerIdToMockInputs;
+	SingleFrameLocalPlayerIdToMockInputs.emplace(std::pair<id_t, std::set<uint8_t>>(Player1Id, { {0}, {1}, {2} }));
 
-	std::map<uint16_t, std::set<uint8_t>> SingleFrameRemotePlayerIndexToMockInputs;
-	SingleFrameRemotePlayerIndexToMockInputs.emplace(std::pair<uint16_t, std::set<uint8_t>>(Player2Index, { {3}, {2}, {1} }));
+	std::map<id_t, std::set<uint8_t>> SingleFrameRemotePlayerIdToMockInputs;
+	SingleFrameRemotePlayerIdToMockInputs.emplace(std::pair<id_t, std::set<uint8_t>>(Player2Id, { {3}, {2}, {1} }));
 
 	for (; MockIterationIndex < StartFrameIndex + MockIterationsCount; MockIterationIndex++)
 	{
 		auto LocalSuccess = SystemMultiton::GetEmulator(LocalSystemIndex).TryTickingToNextFrame({
-			DATA_CFG::Get().SimulationConfiguration.FrameDurationInSeconds / FrameDurationDivider, SingleFrameLocalPlayerIndexToMockInputs
+			DATA_CFG::Get().SimulationConfiguration.FrameDurationInSeconds / FrameDurationDivider, SingleFrameLocalPlayerIdToMockInputs
 		});
 		LogSuccess(LocalSuccess, "LOCAL");
 
 		if (MockIterationIndex * FrameDurationDivider >= StartFrameIndex + FrameAdvantageInFrames)
 		{
 			auto RemoteSuccess = SystemMultiton::GetEmulator(MockRemoteSystemIndex).TryTickingToNextFrame({
-				DATA_CFG::Get().SimulationConfiguration.FrameDurationInSeconds / FrameDurationDivider, SingleFrameRemotePlayerIndexToMockInputs
+				DATA_CFG::Get().SimulationConfiguration.FrameDurationInSeconds / FrameDurationDivider, SingleFrameRemotePlayerIdToMockInputs
 			});
 			LogSuccess(RemoteSuccess, "REMOTE");
 		}
 
-		//SingleFrameLocalPlayerIndexToMockInputs[Player1Index] = { {(uint8_t)(rand() % CPT_IPT_TogglesPayload::MaxInputToken())} };
-		//SingleFrameRemotePlayerIndexToMockInputs[Player2Index] = { {(uint8_t)(rand() % CPT_IPT_TogglesPayload::MaxInputToken())} };
+		//SingleFrameLocalPlayerIdToMockInputs[Player1Id] = { {(uint8_t)(rand() % CPT_IPT_TogglesPayload::MaxInputToken())} };
+		//SingleFrameRemotePlayerIdToMockInputs[Player2Id] = { {(uint8_t)(rand() % CPT_IPT_TogglesPayload::MaxInputToken())} };
 	}
 
 	return true;
