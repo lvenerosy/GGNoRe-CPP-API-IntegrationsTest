@@ -22,7 +22,7 @@ public:
 	std::function<void(const std::vector<uint8_t>&)> DownloadInputs;
 
 protected:
-	void OnReadyToSendInputs(const std::vector<uint8_t>& BinaryPayload) const override
+	void OnReadyToSendInputs(const std::vector<uint8_t>& BinaryPayload) override
 	{
 		DownloadInputs(BinaryPayload);
 	}
