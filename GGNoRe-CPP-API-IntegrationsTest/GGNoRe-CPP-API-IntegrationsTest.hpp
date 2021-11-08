@@ -10,8 +10,6 @@ bool TestRemoteMockRollback();
 
 // TODO:
 // actor lifetime
-// join mid game
-// variable framerate
 
 int main()
 {
