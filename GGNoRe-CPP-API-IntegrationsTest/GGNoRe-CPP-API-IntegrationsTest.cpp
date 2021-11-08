@@ -15,10 +15,6 @@ using namespace GGNoRe::API;
 class TEST_CPT_IPT_Emulator final : public ABS_CPT_IPT_Emulator
 {
 public:
-	TEST_CPT_IPT_Emulator(const DATA_Player Owner)
-		:ABS_CPT_IPT_Emulator(Owner)
-	{}
-
 	std::function<void(const std::vector<uint8_t>&)> DownloadInputs;
 
 protected:
@@ -33,10 +29,6 @@ class TEST_CPT_RB_SaveStates final : public ABS_CPT_RB_SaveStates
 {
 	friend class TEST_CPT_RB_Simulator;
 	uint8_t Counter = 0;
-public:
-	TEST_CPT_RB_SaveStates(const uint8_t SystemIndex)
-		:ABS_CPT_RB_SaveStates(SystemIndex)
-	{}
 
 protected:
 	// This mock should not trigger trigger rollback even if the inputs don't match
@@ -60,8 +52,8 @@ class TEST_CPT_RB_Simulator final : public ABS_CPT_RB_Simulator
 {
 	TEST_CPT_RB_SaveStates& SaveStates;
 public:
-	TEST_CPT_RB_Simulator(const DATA_Player Owner, TEST_CPT_RB_SaveStates& SaveStates)
-		:ABS_CPT_RB_Simulator(Owner), SaveStates(SaveStates)
+	TEST_CPT_RB_Simulator(TEST_CPT_RB_SaveStates& SaveStates)
+		:SaveStates(SaveStates)
 	{}
 
 protected:
@@ -112,22 +104,19 @@ bool TestRemoteMockRollback()
 	const uint16_t FrameAdvantageInFrames = 4;
 	const size_t MockIterationsCount = 120;
 
-	TEST_CPT_IPT_Emulator TrueLocalPlayer1Emulator(TrueLocalPlayer1);
-	TEST_CPT_IPT_Emulator LocalPlayer2Emulator(LocalPlayer2);
-	TEST_CPT_RB_SaveStates TrueLocalPlayer1SaveStates(TrueLocalPlayer1.SystemIndex);
-	TEST_CPT_RB_SaveStates LocalPlayer2SaveStates(LocalPlayer2.SystemIndex);
-	TEST_CPT_RB_Simulator TrueLocalPlayer1Simulator(TrueLocalPlayer1, TrueLocalPlayer1SaveStates);
-	TEST_CPT_RB_Simulator LocalPlayer2Simulator(LocalPlayer2, LocalPlayer2SaveStates);
+	TEST_CPT_IPT_Emulator TrueLocalPlayer1Emulator;
+	TEST_CPT_IPT_Emulator LocalPlayer2Emulator;
+	TEST_CPT_RB_SaveStates TrueLocalPlayer1SaveStates;
+	TEST_CPT_RB_SaveStates LocalPlayer2SaveStates;
+	TEST_CPT_RB_Simulator TrueLocalPlayer1Simulator(TrueLocalPlayer1SaveStates);
+	TEST_CPT_RB_Simulator LocalPlayer2Simulator(LocalPlayer2SaveStates);
 
-	TEST_CPT_IPT_Emulator RemotePlayer1Emulator(RemotePlayer1);
-	TEST_CPT_IPT_Emulator TrueRemotePlayer2Emulator(TrueRemotePlayer2);
-	TEST_CPT_RB_SaveStates RemotePlayer1SaveStates(RemotePlayer1.SystemIndex);
-	TEST_CPT_RB_SaveStates TrueRemotePlayer2SaveStates(TrueRemotePlayer2.SystemIndex);
-	TEST_CPT_RB_Simulator RemotePlayer1Simulator(RemotePlayer1, RemotePlayer1SaveStates);
-	TEST_CPT_RB_Simulator TrueRemotePlayer2Simulator(TrueRemotePlayer2, TrueRemotePlayer2SaveStates);
-
-	SystemMultiton::GetEmulator(TrueLocalPlayer1.SystemIndex).SyncWithRemoteFrameIndex(StartFrameIndex);
-	SystemMultiton::GetEmulator(TrueRemotePlayer2.SystemIndex).SyncWithRemoteFrameIndex(StartFrameIndex);
+	TEST_CPT_IPT_Emulator RemotePlayer1Emulator;
+	TEST_CPT_IPT_Emulator TrueRemotePlayer2Emulator;
+	TEST_CPT_RB_SaveStates RemotePlayer1SaveStates;
+	TEST_CPT_RB_SaveStates TrueRemotePlayer2SaveStates;
+	TEST_CPT_RB_Simulator RemotePlayer1Simulator(RemotePlayer1SaveStates);
+	TEST_CPT_RB_Simulator TrueRemotePlayer2Simulator(TrueRemotePlayer2SaveStates);
 
 	uint16_t MockIterationIndex = StartFrameIndex;
 
@@ -148,6 +137,23 @@ bool TestRemoteMockRollback()
 			}
 		}
 	};
+
+	SystemMultiton::GetEmulator(TrueLocalPlayer1.SystemIndex).SyncWithRemoteFrameIndex(StartFrameIndex);
+	SystemMultiton::GetEmulator(TrueRemotePlayer2.SystemIndex).SyncWithRemoteFrameIndex(StartFrameIndex);
+
+	TrueLocalPlayer1Emulator.Enable(TrueLocalPlayer1);
+	LocalPlayer2Emulator.Enable(LocalPlayer2);
+	TrueLocalPlayer1SaveStates.Enable(TrueLocalPlayer1.SystemIndex);
+	LocalPlayer2SaveStates.Enable(LocalPlayer2.SystemIndex);
+	TrueLocalPlayer1Simulator.Enable(TrueLocalPlayer1, StartFrameIndex);
+	LocalPlayer2Simulator.Enable(LocalPlayer2, StartFrameIndex);
+
+	RemotePlayer1Emulator.Enable(RemotePlayer1);
+	TrueRemotePlayer2Emulator.Enable(TrueRemotePlayer2);
+	RemotePlayer1SaveStates.Enable(RemotePlayer1.SystemIndex);
+	TrueRemotePlayer2SaveStates.Enable(TrueRemotePlayer2.SystemIndex);
+	RemotePlayer1Simulator.Enable(RemotePlayer1, StartFrameIndex);
+	TrueRemotePlayer2Simulator.Enable(TrueRemotePlayer2, StartFrameIndex);
 
 	srand(0);
 
