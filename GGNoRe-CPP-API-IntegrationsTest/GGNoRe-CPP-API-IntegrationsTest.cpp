@@ -93,13 +93,14 @@ bool TestRemoteMockRollback()
 	ConfigWithNoFakedDelay.FakedMissedPredictionsFramesCount = 0; // Comment out to use the fake rollback
 	DATA_CFG::Load(ConfigWithNoFakedDelay);
 
-	const DATA_Player TrueLocalPlayer1{ 0, true, 0 };
-	const DATA_Player LocalPlayer2{ TrueLocalPlayer1.Id + 1, false, TrueLocalPlayer1.SystemIndex };
-
-	const DATA_Player TrueRemotePlayer2{ LocalPlayer2.Id, true, uint8_t(LocalPlayer2.SystemIndex + 1) };
-	const DATA_Player RemotePlayer1{ TrueLocalPlayer1.Id, false, TrueRemotePlayer2.SystemIndex };
-
 	const uint16_t StartFrameIndex = 0;
+
+	const DATA_Player TrueLocalPlayer1{ 0, true, StartFrameIndex, 0 };
+	const DATA_Player LocalPlayer2{ TrueLocalPlayer1.Id + 1, false, StartFrameIndex, TrueLocalPlayer1.SystemIndex };
+
+	const DATA_Player TrueRemotePlayer2{ LocalPlayer2.Id, true, StartFrameIndex, uint8_t(LocalPlayer2.SystemIndex + 1) };
+	const DATA_Player RemotePlayer1{ TrueLocalPlayer1.Id, false, StartFrameIndex, TrueRemotePlayer2.SystemIndex };
+
 	const uint16_t ReceiveRemoteIntervalInFrames = 3;
 	const uint16_t FrameAdvantageInFrames = 4;
 	const size_t MockIterationsCount = 120;
@@ -141,17 +142,17 @@ bool TestRemoteMockRollback()
 	SystemMultiton::GetEmulator(TrueLocalPlayer1.SystemIndex).SyncWithRemoteFrameIndex(StartFrameIndex);
 	SystemMultiton::GetEmulator(TrueRemotePlayer2.SystemIndex).SyncWithRemoteFrameIndex(StartFrameIndex);
 
-	TrueLocalPlayer1Emulator.Enable(TrueLocalPlayer1);
-	LocalPlayer2Emulator.Enable(LocalPlayer2);
-	TrueLocalPlayer1SaveStates.Enable(TrueLocalPlayer1.SystemIndex);
-	LocalPlayer2SaveStates.Enable(LocalPlayer2.SystemIndex);
+	TrueLocalPlayer1Emulator.Enable(TrueLocalPlayer1, StartFrameIndex);
+	LocalPlayer2Emulator.Enable(LocalPlayer2, StartFrameIndex);
+	TrueLocalPlayer1SaveStates.Enable(StartFrameIndex, TrueLocalPlayer1.SystemIndex);
+	LocalPlayer2SaveStates.Enable(StartFrameIndex, LocalPlayer2.SystemIndex);
 	TrueLocalPlayer1Simulator.Enable(TrueLocalPlayer1, StartFrameIndex);
 	LocalPlayer2Simulator.Enable(LocalPlayer2, StartFrameIndex);
 
-	RemotePlayer1Emulator.Enable(RemotePlayer1);
-	TrueRemotePlayer2Emulator.Enable(TrueRemotePlayer2);
-	RemotePlayer1SaveStates.Enable(RemotePlayer1.SystemIndex);
-	TrueRemotePlayer2SaveStates.Enable(TrueRemotePlayer2.SystemIndex);
+	RemotePlayer1Emulator.Enable(RemotePlayer1, StartFrameIndex);
+	TrueRemotePlayer2Emulator.Enable(TrueRemotePlayer2, StartFrameIndex);
+	RemotePlayer1SaveStates.Enable(StartFrameIndex, RemotePlayer1.SystemIndex);
+	TrueRemotePlayer2SaveStates.Enable(StartFrameIndex, TrueRemotePlayer2.SystemIndex);
 	RemotePlayer1Simulator.Enable(RemotePlayer1, StartFrameIndex);
 	TrueRemotePlayer2Simulator.Enable(TrueRemotePlayer2, StartFrameIndex);
 
@@ -178,8 +179,8 @@ bool TestRemoteMockRollback()
 			LogSuccess(RemoteSuccess, "REMOTE");
 		}
 
-		//SingleFrameLocalPlayerIdToMockInputs[Player1Id] = { {(uint8_t)(rand() % CPT_IPT_TogglesPayload::MaxInputToken())} };
-		//SingleFrameRemotePlayerIdToMockInputs[Player2Id] = { {(uint8_t)(rand() % CPT_IPT_TogglesPayload::MaxInputToken())} };
+		//SingleFrameLocalPlayerIdToMockInputs[TrueLocalPlayer1.Id] = { {(uint8_t)(rand() % CPT_IPT_TogglesPayload::MaxInputToken())} };
+		//SingleFrameRemotePlayerIdToMockInputs[TrueRemotePlayer2.Id] = { {(uint8_t)(rand() % CPT_IPT_TogglesPayload::MaxInputToken())} };
 	}
 
 	return true;
