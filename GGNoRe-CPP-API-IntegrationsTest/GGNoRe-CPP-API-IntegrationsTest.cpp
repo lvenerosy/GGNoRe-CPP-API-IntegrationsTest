@@ -110,7 +110,8 @@ bool TestRemoteMockRollback()
 
 	const uint16_t ReceiveRemoteIntervalInFrames = 3;
 	const uint16_t FrameAdvantageInFrames = 4;
-	const size_t MockIterationsCount = 120;
+	const uint16_t FrameDurationDivider = 2;
+	const size_t MockIterationsCount = 60 * FrameDurationDivider;
 
 	TEST_CPT_IPT_Emulator TrueLocalPlayer1Emulator;
 	TEST_CPT_IPT_Emulator LocalPlayer2Emulator;
@@ -126,7 +127,6 @@ bool TestRemoteMockRollback()
 	TEST_CPT_RB_Simulator RemotePlayer1Simulator(RemotePlayer1SaveStates);
 	TEST_CPT_RB_Simulator TrueRemotePlayer2Simulator(TrueRemotePlayer2SaveStates);
 
-	const uint16_t FrameDurationDivider = 2;
 	uint16_t MockIterationIndex = LocalStartFrameIndex * FrameDurationDivider;
 
 	TrueLocalPlayer1Emulator.DownloadInputs = [&](const std::vector<uint8_t>& BinaryPayload)
@@ -137,11 +137,14 @@ bool TestRemoteMockRollback()
 		}
 	};
 
+	const uint16_t RemoteStartMockIterationIndex = (RemoteStartFrameIndex + FrameAdvantageInFrames) * FrameDurationDivider;
+
 	TrueRemotePlayer2Emulator.DownloadInputs = [&](const std::vector<uint8_t>& BinaryPayload)
 	{
-		if (MockIterationIndex >= (RemoteStartFrameIndex + FrameAdvantageInFrames) * FrameDurationDivider)
+		if (MockIterationIndex >= RemoteStartMockIterationIndex)
 		{
-			if (MockIterationIndex % ReceiveRemoteIntervalInFrames * FrameDurationDivider == 0)
+			// The remainder is 0 when starting a new frame and 1 when ending
+			if ((MockIterationIndex - RemoteStartMockIterationIndex) % (ReceiveRemoteIntervalInFrames * FrameDurationDivider) == 1)
 			{
 				SystemMultiton::GetEmulator(TrueLocalPlayer1.SystemIndex).DownloadPlayerBinary(BinaryPayload.data());
 			}
@@ -189,9 +192,9 @@ bool TestRemoteMockRollback()
 		});
 		LogSuccess(LocalSuccess, "LOCAL");
 
-		if (MockIterationIndex >= (RemoteStartFrameIndex + FrameAdvantageInFrames) * FrameDurationDivider)
+		if (MockIterationIndex >= RemoteStartMockIterationIndex)
 		{
-				auto RemoteSuccess = SystemMultiton::GetEmulator(TrueRemotePlayer2.SystemIndex).TryTickingToNextFrame({
+			auto RemoteSuccess = SystemMultiton::GetEmulator(TrueRemotePlayer2.SystemIndex).TryTickingToNextFrame({
 				DATA_CFG::Get().SimulationConfiguration.FrameDurationInSeconds / FrameDurationDivider, SingleFrameRemotePlayerIdToMockInputs
 			});
 			LogSuccess(RemoteSuccess, "REMOTE");
