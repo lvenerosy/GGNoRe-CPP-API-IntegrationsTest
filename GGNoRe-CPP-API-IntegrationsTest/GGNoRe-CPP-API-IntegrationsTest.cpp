@@ -15,13 +15,21 @@ using namespace GGNoRe::API;
 class TEST_CPT_IPT_Emulator final : public ABS_CPT_IPT_Emulator
 {
 public:
-	std::function<void(const std::vector<uint8_t>&)> DownloadInputs;
+	std::set<uint8_t> LocalMockInputs;
+	std::function<void(const std::vector<uint8_t>&)> DownloadRemoteInputs;
 
 protected:
+	const std::set<uint8_t>& OnPollLocalInputs() override
+	{
+		return LocalMockInputs;
+	}
+
 	void OnReadyToSendInputs(const std::vector<uint8_t>& BinaryPayload) override
 	{
-		DownloadInputs(BinaryPayload);
+		DownloadRemoteInputs(BinaryPayload);
 	}
+
+	void OnDestroy() override {}
 };
 
 class TEST_CPT_RB_Simulator;
@@ -70,20 +78,20 @@ protected:
 	void OnEndOfLife() override {}
 };
 
-void LogSuccess(ABS_CPT_IPT_Emulator::SINGLETON::TickSuccess_E Success, std::string SystemName)
+void LogSuccess(ABS_RB_Rollbackable::SINGLETON::TickSuccess_E Success, std::string SystemName)
 {
 	switch (Success)
 	{
-	case ABS_CPT_IPT_Emulator::SINGLETON::TickSuccess_E::StallAdvantage:
+	case ABS_RB_Rollbackable::SINGLETON::TickSuccess_E::StallAdvantage:
 		std::cout << "###########" + SystemName + " STALLING############" << std::endl;
-			break;
-	case ABS_CPT_IPT_Emulator::SINGLETON::TickSuccess_E::StarvedForInput:
+		break;
+	case ABS_RB_Rollbackable::SINGLETON::TickSuccess_E::StarvedForInput:
 		std::cout << "###########" + SystemName + " STARVED############" << std::endl;
-			break;
-	case ABS_CPT_IPT_Emulator::SINGLETON::TickSuccess_E::StayCurrent:
+		break;
+	case ABS_RB_Rollbackable::SINGLETON::TickSuccess_E::StayCurrent:
 		std::cout << "###########" + SystemName + " STAY############" << std::endl;
-			break;
-	case ABS_CPT_IPT_Emulator::SINGLETON::TickSuccess_E::ToNext:
+		break;
+	case ABS_RB_Rollbackable::SINGLETON::TickSuccess_E::ToNext:
 		std::cout << "###########" + SystemName + " NEXT############" << std::endl;
 			break;
 	default:
@@ -129,7 +137,7 @@ bool TestRemoteMockRollback()
 
 	uint16_t MockIterationIndex = LocalStartFrameIndex * FrameDurationDivider;
 
-	TrueLocalPlayer1Emulator.DownloadInputs = [&](const std::vector<uint8_t>& BinaryPayload)
+	TrueLocalPlayer1Emulator.DownloadRemoteInputs = [&](const std::vector<uint8_t>& BinaryPayload)
 	{
 		if (MockIterationIndex >= RemoteStartFrameIndex * FrameDurationDivider)
 		{
@@ -139,7 +147,7 @@ bool TestRemoteMockRollback()
 
 	const uint16_t RemoteStartMockIterationIndex = (RemoteStartFrameIndex + FrameAdvantageInFrames) * FrameDurationDivider;
 
-	TrueRemotePlayer2Emulator.DownloadInputs = [&](const std::vector<uint8_t>& BinaryPayload)
+	TrueRemotePlayer2Emulator.DownloadRemoteInputs = [&](const std::vector<uint8_t>& BinaryPayload)
 	{
 		if (MockIterationIndex >= RemoteStartMockIterationIndex)
 		{
@@ -153,7 +161,7 @@ bool TestRemoteMockRollback()
 
 	SystemMultiton::GetEmulator(TrueLocalPlayer1.SystemIndex).SyncWithRemoteFrameIndex(LocalStartFrameIndex);
 
-	assert(TrueLocalPlayer1Emulator.Enable(TrueLocalPlayer1, LocalStartFrameIndex));
+	TrueLocalPlayer1Emulator.Enable(TrueLocalPlayer1, LocalStartFrameIndex);
 	TrueLocalPlayer1SaveStates.Enable(LocalStartFrameIndex, TrueLocalPlayer1.SystemIndex);
 	TrueLocalPlayer1Simulator.Enable(TrueLocalPlayer1, LocalStartFrameIndex);
 
@@ -173,14 +181,14 @@ bool TestRemoteMockRollback()
 		{
 			IsRemoteInitialized = true;
 
-			assert(LocalPlayer2Emulator.Enable(LocalPlayer2, MockIterationIndex / FrameDurationDivider));
+			LocalPlayer2Emulator.Enable(LocalPlayer2, MockIterationIndex / FrameDurationDivider);
 			LocalPlayer2SaveStates.Enable(RemoteStartFrameIndex, LocalPlayer2.SystemIndex);
 			LocalPlayer2Simulator.Enable(LocalPlayer2, RemoteStartFrameIndex);
 
 			SystemMultiton::GetEmulator(TrueRemotePlayer2.SystemIndex).SyncWithRemoteFrameIndex(RemoteStartFrameIndex);
 
-			assert(RemotePlayer1Emulator.Enable(RemotePlayer1, MockIterationIndex / FrameDurationDivider));
-			assert(TrueRemotePlayer2Emulator.Enable(TrueRemotePlayer2, MockIterationIndex / FrameDurationDivider));
+			RemotePlayer1Emulator.Enable(RemotePlayer1, MockIterationIndex / FrameDurationDivider);
+			TrueRemotePlayer2Emulator.Enable(TrueRemotePlayer2, MockIterationIndex / FrameDurationDivider);
 			RemotePlayer1SaveStates.Enable(RemoteStartFrameIndex, RemotePlayer1.SystemIndex);
 			TrueRemotePlayer2SaveStates.Enable(RemoteStartFrameIndex, TrueRemotePlayer2.SystemIndex);
 			RemotePlayer1Simulator.Enable(RemotePlayer1, RemoteStartFrameIndex);
