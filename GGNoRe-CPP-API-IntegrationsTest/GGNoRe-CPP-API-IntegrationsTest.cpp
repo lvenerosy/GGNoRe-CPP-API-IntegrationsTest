@@ -83,19 +83,19 @@ void LogSuccess(ABS_RB_Rollbackable::SINGLETON::TickSuccess_E Success, std::stri
 	switch (Success)
 	{
 	case ABS_RB_Rollbackable::SINGLETON::TickSuccess_E::StallAdvantage:
-		std::cout << "###########" + SystemName + " STALLING############" << std::endl;
+		std::cout << "^^^^^^^^^^^^" + SystemName + " STALLING^^^^^^^^^^^^" << std::endl << std::endl;
 		break;
 	case ABS_RB_Rollbackable::SINGLETON::TickSuccess_E::StarvedForInput:
-		std::cout << "###########" + SystemName + " STARVED############" << std::endl;
+		std::cout << "^^^^^^^^^^^^" + SystemName + " STARVED^^^^^^^^^^^^" << std::endl << std::endl;
 		break;
 	case ABS_RB_Rollbackable::SINGLETON::TickSuccess_E::StayCurrent:
-		std::cout << "###########" + SystemName + " STAY############" << std::endl;
+		std::cout << "^^^^^^^^^^^^" + SystemName + " STAY^^^^^^^^^^^^" << std::endl << std::endl;
 		break;
 	case ABS_RB_Rollbackable::SINGLETON::TickSuccess_E::ToNext:
-		std::cout << "###########" + SystemName + " NEXT############" << std::endl;
-			break;
+		std::cout << "^^^^^^^^^^^^" + SystemName + " NEXT^^^^^^^^^^^^" << std::endl << std::endl;
+		break;
 	default:
-		std::cout << "###########" + SystemName + " DEFAULT############" << std::endl;
+		std::cout << "^^^^^^^^^^^^" + SystemName + " DEFAULT^^^^^^^^^^^^" << std::endl << std::endl;
 		break;
 	}
 }
@@ -122,6 +122,7 @@ bool TestRemoteMockRollback()
 	const size_t MockIterationsCount = 60 * FrameDurationDivider;
 
 	TEST_CPT_IPT_Emulator TrueLocalPlayer1Emulator;
+	TrueLocalPlayer1Emulator.LocalMockInputs = { {0}, {1}, {2} };
 	TEST_CPT_IPT_Emulator LocalPlayer2Emulator;
 	TEST_CPT_RB_SaveStates TrueLocalPlayer1SaveStates(LocalStartFrameIndex);
 	TEST_CPT_RB_SaveStates LocalPlayer2SaveStates(RemoteStartFrameIndex);
@@ -130,6 +131,7 @@ bool TestRemoteMockRollback()
 
 	TEST_CPT_IPT_Emulator RemotePlayer1Emulator;
 	TEST_CPT_IPT_Emulator TrueRemotePlayer2Emulator;
+	TrueRemotePlayer2Emulator.LocalMockInputs = { {3}, {2}, {1} };
 	TEST_CPT_RB_SaveStates RemotePlayer1SaveStates(RemoteStartFrameIndex);
 	TEST_CPT_RB_SaveStates TrueRemotePlayer2SaveStates(RemoteStartFrameIndex);
 	TEST_CPT_RB_Simulator RemotePlayer1Simulator(RemotePlayer1SaveStates);
@@ -141,7 +143,7 @@ bool TestRemoteMockRollback()
 	{
 		if (MockIterationIndex >= RemoteStartFrameIndex * FrameDurationDivider)
 		{
-			SystemMultiton::GetEmulator(TrueRemotePlayer2.SystemIndex).DownloadPlayerBinary(BinaryPayload.data());
+			SystemMultiton::GetEmulator(TrueRemotePlayer2.SystemIndex).DownloadRemotePlayerBinary(BinaryPayload.data());
 		}
 	};
 
@@ -154,24 +156,18 @@ bool TestRemoteMockRollback()
 			// The remainder is 0 when starting a new frame and 1 when ending
 			if ((MockIterationIndex - RemoteStartMockIterationIndex) % (ReceiveRemoteIntervalInFrames * FrameDurationDivider) == 1)
 			{
-				SystemMultiton::GetEmulator(TrueLocalPlayer1.SystemIndex).DownloadPlayerBinary(BinaryPayload.data());
+				SystemMultiton::GetEmulator(TrueLocalPlayer1.SystemIndex).DownloadRemotePlayerBinary(BinaryPayload.data());
 			}
 		}
 	};
 
-	SystemMultiton::GetEmulator(TrueLocalPlayer1.SystemIndex).SyncWithRemoteFrameIndex(LocalStartFrameIndex);
+	SystemMultiton::GetRollbackable(TrueLocalPlayer1.SystemIndex).SyncWithRemoteFrameIndex(LocalStartFrameIndex);
 
-	TrueLocalPlayer1Emulator.Enable(TrueLocalPlayer1, LocalStartFrameIndex);
+	TrueLocalPlayer1Emulator.Activate(TrueLocalPlayer1);
 	TrueLocalPlayer1SaveStates.Enable(LocalStartFrameIndex, TrueLocalPlayer1.SystemIndex);
 	TrueLocalPlayer1Simulator.Enable(TrueLocalPlayer1, LocalStartFrameIndex);
 
 	srand(0);
-
-	std::map<id_t, std::set<uint8_t>> SingleFrameLocalPlayerIdToMockInputs;
-	SingleFrameLocalPlayerIdToMockInputs.emplace(std::pair<id_t, std::set<uint8_t>>(TrueLocalPlayer1.Id, { {0}, {1}, {2} }));
-
-	std::map<id_t, std::set<uint8_t>> SingleFrameRemotePlayerIdToMockInputs;
-	SingleFrameRemotePlayerIdToMockInputs.emplace(std::pair<id_t, std::set<uint8_t>>(TrueRemotePlayer2.Id, { {3}, {2}, {1} }));
 
 	bool IsRemoteInitialized = false;
 
@@ -181,35 +177,31 @@ bool TestRemoteMockRollback()
 		{
 			IsRemoteInitialized = true;
 
-			LocalPlayer2Emulator.Enable(LocalPlayer2, MockIterationIndex / FrameDurationDivider);
+			LocalPlayer2Emulator.Activate(LocalPlayer2);
 			LocalPlayer2SaveStates.Enable(RemoteStartFrameIndex, LocalPlayer2.SystemIndex);
 			LocalPlayer2Simulator.Enable(LocalPlayer2, RemoteStartFrameIndex);
 
-			SystemMultiton::GetEmulator(TrueRemotePlayer2.SystemIndex).SyncWithRemoteFrameIndex(RemoteStartFrameIndex);
+			SystemMultiton::GetRollbackable(TrueRemotePlayer2.SystemIndex).SyncWithRemoteFrameIndex(RemoteStartFrameIndex);
 
-			RemotePlayer1Emulator.Enable(RemotePlayer1, MockIterationIndex / FrameDurationDivider);
-			TrueRemotePlayer2Emulator.Enable(TrueRemotePlayer2, MockIterationIndex / FrameDurationDivider);
+			RemotePlayer1Emulator.Activate(RemotePlayer1);
+			TrueRemotePlayer2Emulator.Activate(TrueRemotePlayer2);
 			RemotePlayer1SaveStates.Enable(RemoteStartFrameIndex, RemotePlayer1.SystemIndex);
 			TrueRemotePlayer2SaveStates.Enable(RemoteStartFrameIndex, TrueRemotePlayer2.SystemIndex);
 			RemotePlayer1Simulator.Enable(RemotePlayer1, RemoteStartFrameIndex);
 			TrueRemotePlayer2Simulator.Enable(TrueRemotePlayer2, RemoteStartFrameIndex);
 		}
 
-		auto LocalSuccess = SystemMultiton::GetEmulator(TrueLocalPlayer1.SystemIndex).TryTickingToNextFrame({
-			DATA_CFG::Get().SimulationConfiguration.FrameDurationInSeconds / FrameDurationDivider, SingleFrameLocalPlayerIdToMockInputs
-		});
+		auto LocalSuccess = SystemMultiton::GetRollbackable(TrueLocalPlayer1.SystemIndex).TryTickingToNextFrame(DATA_CFG::Get().SimulationConfiguration.FrameDurationInSeconds / FrameDurationDivider);
 		LogSuccess(LocalSuccess, "LOCAL");
 
 		if (MockIterationIndex >= RemoteStartMockIterationIndex)
 		{
-			auto RemoteSuccess = SystemMultiton::GetEmulator(TrueRemotePlayer2.SystemIndex).TryTickingToNextFrame({
-				DATA_CFG::Get().SimulationConfiguration.FrameDurationInSeconds / FrameDurationDivider, SingleFrameRemotePlayerIdToMockInputs
-			});
+			auto RemoteSuccess = SystemMultiton::GetRollbackable(TrueRemotePlayer2.SystemIndex).TryTickingToNextFrame(DATA_CFG::Get().SimulationConfiguration.FrameDurationInSeconds / FrameDurationDivider);
 			LogSuccess(RemoteSuccess, "REMOTE");
 		}
 
-		//SingleFrameLocalPlayerIdToMockInputs[TrueLocalPlayer1.Id] = { {(uint8_t)(rand() % CPT_IPT_TogglesPayload::MaxInputToken())} };
-		//SingleFrameRemotePlayerIdToMockInputs[TrueRemotePlayer2.Id] = { {(uint8_t)(rand() % CPT_IPT_TogglesPayload::MaxInputToken())} };
+		//TrueLocalPlayer1Emulator.LocalMockInputs = { {(uint8_t)(rand() % CPT_IPT_TogglesPayload::MaxInputToken())} };
+		//TrueRemotePlayer2Emulator.LocalMockInputs = { {(uint8_t)(rand() % CPT_IPT_TogglesPayload::MaxInputToken())} };
 	}
 
 	return true;
