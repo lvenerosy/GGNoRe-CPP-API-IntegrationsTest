@@ -163,7 +163,7 @@ bool TestRemoteMockRollback()
 
 	SystemMultiton::GetRollbackable(TrueLocalPlayer1.SystemIndex).SyncWithRemoteFrameIndex(LocalStartFrameIndex);
 
-	TrueLocalPlayer1Emulator.Activate(TrueLocalPlayer1);
+	TrueLocalPlayer1Emulator.ActivateNow(TrueLocalPlayer1);
 	TrueLocalPlayer1SaveStates.Enable(LocalStartFrameIndex, TrueLocalPlayer1.SystemIndex);
 	TrueLocalPlayer1Simulator.Enable(TrueLocalPlayer1, LocalStartFrameIndex);
 
@@ -177,14 +177,14 @@ bool TestRemoteMockRollback()
 		{
 			IsRemoteInitialized = true;
 
-			LocalPlayer2Emulator.Activate(LocalPlayer2);
+			LocalPlayer2Emulator.ActivateNow(LocalPlayer2);
 			LocalPlayer2SaveStates.Enable(RemoteStartFrameIndex, LocalPlayer2.SystemIndex);
 			LocalPlayer2Simulator.Enable(LocalPlayer2, RemoteStartFrameIndex);
 
 			SystemMultiton::GetRollbackable(TrueRemotePlayer2.SystemIndex).SyncWithRemoteFrameIndex(RemoteStartFrameIndex);
 
-			RemotePlayer1Emulator.Activate(RemotePlayer1);
-			TrueRemotePlayer2Emulator.Activate(TrueRemotePlayer2);
+			RemotePlayer1Emulator.ActivateNow(RemotePlayer1);
+			TrueRemotePlayer2Emulator.ActivateNow(TrueRemotePlayer2);
 			RemotePlayer1SaveStates.Enable(RemoteStartFrameIndex, RemotePlayer1.SystemIndex);
 			TrueRemotePlayer2SaveStates.Enable(RemoteStartFrameIndex, TrueRemotePlayer2.SystemIndex);
 			RemotePlayer1Simulator.Enable(RemotePlayer1, RemoteStartFrameIndex);
