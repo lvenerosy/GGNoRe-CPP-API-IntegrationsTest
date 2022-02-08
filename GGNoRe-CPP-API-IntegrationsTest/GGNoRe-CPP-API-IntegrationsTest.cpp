@@ -59,6 +59,8 @@ protected:
 			Counter = SourceBuffer[0];
 		}
 	}
+
+	void OnDestroy() override {}
 };
 
 class TEST_CPT_RB_Simulator final : public ABS_CPT_RB_Simulator
@@ -164,7 +166,7 @@ bool TestRemoteMockRollback()
 	SystemMultiton::GetRollbackable(TrueLocalPlayer1.SystemIndex).SyncWithRemoteFrameIndex(LocalStartFrameIndex);
 
 	TrueLocalPlayer1Emulator.ActivateNow(TrueLocalPlayer1);
-	TrueLocalPlayer1SaveStates.Enable(LocalStartFrameIndex, TrueLocalPlayer1.SystemIndex);
+	TrueLocalPlayer1SaveStates.ActivateNow(TrueLocalPlayer1);
 	TrueLocalPlayer1Simulator.Enable(TrueLocalPlayer1, LocalStartFrameIndex);
 
 	srand(0);
@@ -178,15 +180,15 @@ bool TestRemoteMockRollback()
 			IsRemoteInitialized = true;
 
 			LocalPlayer2Emulator.ActivateNow(LocalPlayer2);
-			LocalPlayer2SaveStates.Enable(RemoteStartFrameIndex, LocalPlayer2.SystemIndex);
+			LocalPlayer2SaveStates.ActivateNow(LocalPlayer2);
 			LocalPlayer2Simulator.Enable(LocalPlayer2, RemoteStartFrameIndex);
 
 			SystemMultiton::GetRollbackable(TrueRemotePlayer2.SystemIndex).SyncWithRemoteFrameIndex(RemoteStartFrameIndex);
 
 			RemotePlayer1Emulator.ActivateNow(RemotePlayer1);
 			TrueRemotePlayer2Emulator.ActivateNow(TrueRemotePlayer2);
-			RemotePlayer1SaveStates.Enable(RemoteStartFrameIndex, RemotePlayer1.SystemIndex);
-			TrueRemotePlayer2SaveStates.Enable(RemoteStartFrameIndex, TrueRemotePlayer2.SystemIndex);
+			RemotePlayer1SaveStates.ActivateNow(RemotePlayer1);
+			TrueRemotePlayer2SaveStates.ActivateNow(TrueRemotePlayer2);
 			RemotePlayer1Simulator.Enable(RemotePlayer1, RemoteStartFrameIndex);
 			TrueRemotePlayer2Simulator.Enable(TrueRemotePlayer2, RemoteStartFrameIndex);
 		}
