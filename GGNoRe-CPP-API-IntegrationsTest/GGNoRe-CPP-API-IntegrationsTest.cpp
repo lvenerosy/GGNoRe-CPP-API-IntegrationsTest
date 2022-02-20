@@ -16,7 +16,7 @@ class TEST_CPT_IPT_Emulator final : public ABS_CPT_IPT_Emulator
 {
 public:
 	std::set<uint8_t> LocalMockInputs;
-	std::function<void(const std::vector<uint8_t>&)> DownloadRemoteInputs;
+	std::function<void(const std::vector<uint8_t>&)> RemoteDownloadInputs;
 
 protected:
 	const std::set<uint8_t>& OnPollLocalInputs() override
@@ -26,7 +26,7 @@ protected:
 
 	void OnReadyToSendInputs(const std::vector<uint8_t>& BinaryPayload) override
 	{
-		DownloadRemoteInputs(BinaryPayload);
+		RemoteDownloadInputs(BinaryPayload);
 	}
 
 	void OnDestroy() override {}
@@ -109,7 +109,7 @@ bool TestRemoteMockRollback()
 	DATA_CFG::Load(ConfigWithNoFakedDelay);
 
 	const uint16_t LocalStartFrameIndex = 0;
-	const uint16_t RemoteStartFrameIndex = 2;
+	const uint16_t RemoteStartFrameIndex = 4;
 	assert(RemoteStartFrameIndex >= LocalStartFrameIndex);
 
 	const DATA_Player TrueLocalPlayer1{ 0, true, LocalStartFrameIndex, 0 };
@@ -141,7 +141,7 @@ bool TestRemoteMockRollback()
 
 	uint16_t MockIterationIndex = LocalStartFrameIndex * FrameDurationDivider;
 
-	TrueLocalPlayer1Emulator.DownloadRemoteInputs = [&](const std::vector<uint8_t>& BinaryPayload)
+	TrueLocalPlayer1Emulator.RemoteDownloadInputs = [&](const std::vector<uint8_t>& BinaryPayload)
 	{
 		if (MockIterationIndex >= RemoteStartFrameIndex * FrameDurationDivider)
 		{
@@ -151,7 +151,7 @@ bool TestRemoteMockRollback()
 
 	const uint16_t RemoteStartMockIterationIndex = (RemoteStartFrameIndex + FrameAdvantageInFrames) * FrameDurationDivider;
 
-	TrueRemotePlayer2Emulator.DownloadRemoteInputs = [&](const std::vector<uint8_t>& BinaryPayload)
+	TrueRemotePlayer2Emulator.RemoteDownloadInputs = [&](const std::vector<uint8_t>& BinaryPayload)
 	{
 		if (MockIterationIndex >= RemoteStartMockIterationIndex)
 		{
