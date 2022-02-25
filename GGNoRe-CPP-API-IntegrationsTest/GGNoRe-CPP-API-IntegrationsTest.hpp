@@ -11,8 +11,8 @@ bool TestRemoteMockRollback();
 // TODO:
 // actor lifetime
 // pooling support
-// join mid game
 // more than 2 players
+// Activate/DeactivateInPast
 
 int main()
 {

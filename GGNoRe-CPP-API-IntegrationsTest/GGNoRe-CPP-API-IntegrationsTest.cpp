@@ -29,7 +29,7 @@ protected:
 		RemoteDownloadInputs(BinaryPayload);
 	}
 
-	void OnDestroy() override {}
+	void OnResetAndCleanup() override {}
 };
 
 class TEST_CPT_RB_Simulator;
@@ -60,7 +60,7 @@ protected:
 		}
 	}
 
-	void OnDestroy() override {}
+	void OnResetAndCleanup() override {}
 };
 
 class TEST_CPT_RB_Simulator final : public ABS_CPT_RB_Simulator
