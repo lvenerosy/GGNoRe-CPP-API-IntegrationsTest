@@ -63,7 +63,7 @@ protected:
 	void OnResetAndCleanup() override {}
 };
 
-class TEST_CPT_RB_Simulator final : public ABS_CPT_RB_Simulator
+class TEST_CPT_RB_Simulator final : public ABS_RB_Rollbackable
 {
 	TEST_CPT_RB_SaveStates& SaveStates;
 public:
@@ -72,32 +72,47 @@ public:
 	{}
 
 protected:
-	void OnSimulateFrame(const float FrameDurationInSeconds, const std::set<uint8_t>& Inputs) override
-	{
-		SaveStates.Counter++;
-	}
+	void OnActivate(const ActivateEvent Activation) override {}
+	void OnDeactivate(const DeactivateEvent Deactivation) override {}
 
-	void OnEndOfLife() override {}
+	void OnRollActivationBack(const DATA_Player Owner) override {}
+	void OnRollDeactivationBack(const DATA_Player Owner) override {}
+
+	void OnPreRollback(const uint16_t RollbackFrameIndex) override {}
+	void OnRollback(const uint16_t RollbackFrameIndex) override {}
+
+	void OnSaveFrame(const uint16_t SavedFrameIndex) override {}
+	void OnPostSaveFrame(const uint16_t SavedFrameIndex) override {}
+
+	void OnPreSimulate(const uint16_t SimulatedFrameIndex) override {}
+	void OnSimulate(const uint16_t SimulatedFrameIndex, const std::set<uint8_t>& Inputs) override { SaveStates.Counter++; }
+
+	void OnResetAndCleanup() override {}
+
+	void OnStarvedForInputFrame(const uint16_t FrameIndex) override {}
+	void OnStallAdvantageFrame(const uint16_t FrameIndex) override {}
+	void OnStayCurrentFrame(const uint16_t FrameIndex) override {}
+	void OnPreToNextFrame(const uint16_t FrameIndex) override {}
 };
 
-void LogSuccess(ABS_RB_Rollbackable::SINGLETON::TickSuccess_E Success, std::string SystemName)
+void LogSuccess(ABS_RB_Rollbackable::SINGLETON::TickSuccess_E Success, std::string SystemName, uint16_t IterationIndex)
 {
 	switch (Success)
 	{
 	case ABS_RB_Rollbackable::SINGLETON::TickSuccess_E::StallAdvantage:
-		std::cout << "^^^^^^^^^^^^" + SystemName + " STALLING^^^^^^^^^^^^" << std::endl << std::endl;
-		break;
+		std::cout << "^^^^^^^^^^^^ " + SystemName + " STALLING - ITERATION " + std::to_string(IterationIndex)  +" ^^^^^^^^^^^^" << std::endl << std::endl;
+			break;
 	case ABS_RB_Rollbackable::SINGLETON::TickSuccess_E::StarvedForInput:
-		std::cout << "^^^^^^^^^^^^" + SystemName + " STARVED^^^^^^^^^^^^" << std::endl << std::endl;
-		break;
+		std::cout << "^^^^^^^^^^^^ " + SystemName + " STARVED - ITERATION " + std::to_string(IterationIndex)  +" ^^^^^^^^^^^^" << std::endl << std::endl;
+			break;
 	case ABS_RB_Rollbackable::SINGLETON::TickSuccess_E::StayCurrent:
-		std::cout << "^^^^^^^^^^^^" + SystemName + " STAY^^^^^^^^^^^^" << std::endl << std::endl;
-		break;
+		std::cout << "^^^^^^^^^^^^ " + SystemName + " STAY - ITERATION " + std::to_string(IterationIndex)  +" ^^^^^^^^^^^^" << std::endl << std::endl;
+			break;
 	case ABS_RB_Rollbackable::SINGLETON::TickSuccess_E::ToNext:
-		std::cout << "^^^^^^^^^^^^" + SystemName + " NEXT^^^^^^^^^^^^" << std::endl << std::endl;
-		break;
+		std::cout << "^^^^^^^^^^^^ " + SystemName + " NEXT - ITERATION " + std::to_string(IterationIndex)  +" ^^^^^^^^^^^^" << std::endl << std::endl;
+			break;
 	default:
-		std::cout << "^^^^^^^^^^^^" + SystemName + " DEFAULT^^^^^^^^^^^^" << std::endl << std::endl;
+		std::cout << "^^^^^^^^^^^^ " + SystemName + " DEFAULT - ITERATION " + std::to_string(IterationIndex)  +" ^^^^^^^^^^^" << std::endl << std::endl;
 		break;
 	}
 }
@@ -120,6 +135,7 @@ bool TestRemoteMockRollback()
 
 	const uint16_t ReceiveRemoteIntervalInFrames = 3;
 	const uint16_t FrameAdvantageInFrames = 4;
+	assert(RemoteStartFrameIndex + FrameAdvantageInFrames < ConfigWithNoFakedDelay.SaveStatesBufferSize());
 	const uint16_t FrameDurationDivider = 2;
 	const size_t MockIterationsCount = 60 * FrameDurationDivider;
 
@@ -167,7 +183,7 @@ bool TestRemoteMockRollback()
 
 	TrueLocalPlayer1Emulator.ActivateNow(TrueLocalPlayer1);
 	TrueLocalPlayer1SaveStates.ActivateNow(TrueLocalPlayer1);
-	TrueLocalPlayer1Simulator.Enable(TrueLocalPlayer1, LocalStartFrameIndex);
+	TrueLocalPlayer1Simulator.ActivateNow(TrueLocalPlayer1);
 
 	srand(0);
 
@@ -175,13 +191,13 @@ bool TestRemoteMockRollback()
 
 	for (; MockIterationIndex < LocalStartFrameIndex * FrameDurationDivider + (uint16_t)MockIterationsCount; MockIterationIndex++)
 	{
-		if (MockIterationIndex == RemoteStartFrameIndex * FrameDurationDivider && !IsRemoteInitialized)
+		if (RemoteStartFrameIndex == SystemMultiton::GetRollbackable(TrueLocalPlayer1.SystemIndex).UnsimulatedFrameIndex() && !IsRemoteInitialized)
 		{
 			IsRemoteInitialized = true;
 
 			LocalPlayer2Emulator.ActivateNow(LocalPlayer2);
 			LocalPlayer2SaveStates.ActivateNow(LocalPlayer2);
-			LocalPlayer2Simulator.Enable(LocalPlayer2, RemoteStartFrameIndex);
+			LocalPlayer2Simulator.ActivateNow(LocalPlayer2);
 
 			SystemMultiton::GetRollbackable(TrueRemotePlayer2.SystemIndex).SyncWithRemoteFrameIndex(RemoteStartFrameIndex);
 
@@ -189,17 +205,17 @@ bool TestRemoteMockRollback()
 			TrueRemotePlayer2Emulator.ActivateNow(TrueRemotePlayer2);
 			RemotePlayer1SaveStates.ActivateNow(RemotePlayer1);
 			TrueRemotePlayer2SaveStates.ActivateNow(TrueRemotePlayer2);
-			RemotePlayer1Simulator.Enable(RemotePlayer1, RemoteStartFrameIndex);
-			TrueRemotePlayer2Simulator.Enable(TrueRemotePlayer2, RemoteStartFrameIndex);
+			RemotePlayer1Simulator.ActivateNow(RemotePlayer1);
+			TrueRemotePlayer2Simulator.ActivateNow(TrueRemotePlayer2);
 		}
 
 		auto LocalSuccess = SystemMultiton::GetRollbackable(TrueLocalPlayer1.SystemIndex).TryTickingToNextFrame(DATA_CFG::Get().SimulationConfiguration.FrameDurationInSeconds / FrameDurationDivider);
-		LogSuccess(LocalSuccess, "LOCAL");
+		LogSuccess(LocalSuccess, "LOCAL", MockIterationIndex);
 
 		if (MockIterationIndex >= RemoteStartMockIterationIndex)
 		{
 			auto RemoteSuccess = SystemMultiton::GetRollbackable(TrueRemotePlayer2.SystemIndex).TryTickingToNextFrame(DATA_CFG::Get().SimulationConfiguration.FrameDurationInSeconds / FrameDurationDivider);
-			LogSuccess(RemoteSuccess, "REMOTE");
+			LogSuccess(RemoteSuccess, "REMOTE", MockIterationIndex);
 		}
 
 		//TrueLocalPlayer1Emulator.LocalMockInputs = { {(uint8_t)(rand() % CPT_IPT_TogglesPayload::MaxInputToken())} };
