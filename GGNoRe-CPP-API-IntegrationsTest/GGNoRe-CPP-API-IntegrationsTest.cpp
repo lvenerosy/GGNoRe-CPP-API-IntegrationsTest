@@ -19,6 +19,26 @@ public:
 	std::function<void(const std::vector<uint8_t>&)> RemoteDownloadInputs;
 
 protected:
+	void OnActivate(const ActivateEvent Activation) override {}
+	void OnDeactivate(const DeactivateEvent Deactivation) override {}
+
+	void OnRollActivationBack(const DATA_Player Owner) override {}
+	void OnRollDeactivationBack(const DATA_Player Owner) override {}
+
+	void OnPreRollback(const uint16_t RollbackFrameIndex) override {}
+	void OnRollback(const uint16_t RollbackFrameIndex) override {}
+
+	void OnSaveFrame(const uint16_t SavedFrameIndex) override {}
+	void OnPostSaveFrame(const uint16_t SavedFrameIndex) override {}
+
+	void OnPreSimulate(const uint16_t SimulatedFrameIndex) override {}
+	void OnSimulate(const uint16_t SimulatedFrameIndex, const std::set<uint8_t>& Inputs) override {}
+
+	void OnStarvedForInputFrame(const uint16_t FrameIndex) override {}
+	void OnStallAdvantageFrame(const uint16_t FrameIndex) override {}
+	void OnStayCurrentFrame(const uint16_t FrameIndex) override {}
+	void OnPreToNextFrame(const uint16_t FrameIndex) override {}
+
 	const std::set<uint8_t>& OnPollLocalInputs() override
 	{
 		return LocalMockInputs;
@@ -44,6 +64,26 @@ public:
 	{}
 
 protected:
+	void OnActivate(const ActivateEvent Activation) override {}
+	void OnDeactivate(const DeactivateEvent Deactivation) override {}
+
+	void OnRollActivationBack(const DATA_Player Owner) override {}
+	void OnRollDeactivationBack(const DATA_Player Owner) override {}
+
+	void OnPreRollback(const uint16_t RollbackFrameIndex) override {}
+	void OnRollback(const uint16_t RollbackFrameIndex) override {}
+
+	void OnSaveFrame(const uint16_t SavedFrameIndex) override {}
+	void OnPostSaveFrame(const uint16_t SavedFrameIndex) override {}
+
+	void OnPreSimulate(const uint16_t SimulatedFrameIndex) override {}
+	void OnSimulate(const uint16_t SimulatedFrameIndex, const std::set<uint8_t>& Inputs) override {}
+
+	void OnStarvedForInputFrame(const uint16_t FrameIndex) override {}
+	void OnStallAdvantageFrame(const uint16_t FrameIndex) override {}
+	void OnStayCurrentFrame(const uint16_t FrameIndex) override {}
+	void OnPreToNextFrame(const uint16_t FrameIndex) override {}
+
 	// This mock should not trigger trigger rollback even if the inputs don't match
 	// The objective here is to always fill the buffer the same way so the checksum is consistent
 	void OnSerialize(std::vector<uint8_t>& TargetBufferOut) override
@@ -63,7 +103,7 @@ protected:
 	void OnResetAndCleanup() override {}
 };
 
-class TEST_CPT_RB_Simulator final : public ABS_RB_Rollbackable
+class TEST_CPT_RB_Simulator final : public ABS_CPT_RB_Simulator
 {
 	TEST_CPT_RB_SaveStates& SaveStates;
 public:
@@ -87,12 +127,12 @@ protected:
 	void OnPreSimulate(const uint16_t SimulatedFrameIndex) override {}
 	void OnSimulate(const uint16_t SimulatedFrameIndex, const std::set<uint8_t>& Inputs) override { SaveStates.Counter++; }
 
-	void OnResetAndCleanup() override {}
-
 	void OnStarvedForInputFrame(const uint16_t FrameIndex) override {}
 	void OnStallAdvantageFrame(const uint16_t FrameIndex) override {}
 	void OnStayCurrentFrame(const uint16_t FrameIndex) override {}
 	void OnPreToNextFrame(const uint16_t FrameIndex) override {}
+
+	void OnResetAndCleanup() override {}
 };
 
 void LogSuccess(ABS_RB_Rollbackable::SINGLETON::TickSuccess_E Success, std::string SystemName, uint16_t IterationIndex)
