@@ -6,7 +6,7 @@
 
 #include <assert.h>
 
-bool TestRemoteMockRollback();
+bool TestRemoteMockRollback(const bool UseFakeRollback, const bool UseRandomInputs);
 
 // TODO:
 // actor lifetime
@@ -16,7 +16,10 @@ bool TestRemoteMockRollback();
 
 int main()
 {
-	assert(TestRemoteMockRollback());
+	assert(TestRemoteMockRollback(false, false));
+	assert(TestRemoteMockRollback(true, false));
+	assert(TestRemoteMockRollback(false, true));
+	assert(TestRemoteMockRollback(true, true));
 
 	return 0;
 }

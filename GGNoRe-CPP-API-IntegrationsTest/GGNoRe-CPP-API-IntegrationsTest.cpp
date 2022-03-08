@@ -18,6 +18,8 @@ public:
 	std::set<uint8_t> LocalMockInputs;
 	std::function<void(const std::vector<uint8_t>&)> RemoteDownloadInputs;
 
+	~TEST_CPT_IPT_Emulator() { ResetAndCleanup(); }
+
 protected:
 	void OnActivate(const ActivateEvent Activation) override {}
 	void OnDeactivate(const DeactivateEvent Deactivation) override {}
@@ -49,7 +51,7 @@ protected:
 		RemoteDownloadInputs(BinaryPayload);
 	}
 
-	void OnResetAndCleanup() override {}
+	void ResetAndCleanup() override {}
 };
 
 class TEST_CPT_RB_Simulator;
@@ -62,6 +64,8 @@ public:
 	TEST_CPT_RB_SaveStates(uint8_t Counter)
 		:ABS_CPT_RB_SaveStates(), Counter(Counter)
 	{}
+
+	~TEST_CPT_RB_SaveStates() { ResetAndCleanup(); }
 
 protected:
 	void OnActivate(const ActivateEvent Activation) override {}
@@ -100,7 +104,7 @@ protected:
 		}
 	}
 
-	void OnResetAndCleanup() override {}
+	void ResetAndCleanup() override {}
 };
 
 class TEST_CPT_RB_Simulator final : public ABS_CPT_RB_Simulator
@@ -110,6 +114,8 @@ public:
 	TEST_CPT_RB_Simulator(TEST_CPT_RB_SaveStates& SaveStates)
 		:SaveStates(SaveStates)
 	{}
+
+	~TEST_CPT_RB_Simulator() { ResetAndCleanup(); }
 
 protected:
 	void OnActivate(const ActivateEvent Activation) override {}
@@ -132,7 +138,7 @@ protected:
 	void OnStayCurrentFrame(const uint16_t FrameIndex) override {}
 	void OnPreToNextFrame(const uint16_t FrameIndex) override {}
 
-	void OnResetAndCleanup() override {}
+	void ResetAndCleanup() override {}
 };
 
 void LogSuccess(ABS_RB_Rollbackable::SINGLETON::TickSuccess_E Success, std::string SystemName, uint16_t IterationIndex)
@@ -157,11 +163,11 @@ void LogSuccess(ABS_RB_Rollbackable::SINGLETON::TickSuccess_E Success, std::stri
 	}
 }
 
-bool TestRemoteMockRollback()
+bool TestRemoteMockRollback(const bool UseFakeRollback, const bool UseRandomInputs)
 {
-	DATA_CFG ConfigWithNoFakedDelay;
-	ConfigWithNoFakedDelay.FakedMissedPredictionsFramesCount = 0; // Comment out to use the fake rollback
-	DATA_CFG::Load(ConfigWithNoFakedDelay);
+	DATA_CFG Config;
+	Config.FakedMissedPredictionsFramesCount *= UseFakeRollback;
+	DATA_CFG::Load(Config);
 
 	const uint16_t LocalStartFrameIndex = 0;
 	const uint16_t RemoteStartFrameIndex = 4;
@@ -175,7 +181,7 @@ bool TestRemoteMockRollback()
 
 	const uint16_t ReceiveRemoteIntervalInFrames = 3;
 	const uint16_t FrameAdvantageInFrames = 4;
-	assert(RemoteStartFrameIndex + FrameAdvantageInFrames < ConfigWithNoFakedDelay.SaveStatesBufferSize());
+	assert(RemoteStartFrameIndex + FrameAdvantageInFrames < Config.SaveStatesBufferSize());
 	const uint16_t FrameDurationDivider = 2;
 	const size_t MockIterationsCount = 60 * FrameDurationDivider;
 
@@ -258,9 +264,15 @@ bool TestRemoteMockRollback()
 			LogSuccess(RemoteSuccess, "REMOTE", MockIterationIndex);
 		}
 
-		//TrueLocalPlayer1Emulator.LocalMockInputs = { {(uint8_t)(rand() % CPT_IPT_TogglesPayload::MaxInputToken())} };
-		//TrueRemotePlayer2Emulator.LocalMockInputs = { {(uint8_t)(rand() % CPT_IPT_TogglesPayload::MaxInputToken())} };
+		if (UseRandomInputs)
+		{
+			TrueLocalPlayer1Emulator.LocalMockInputs = { {(uint8_t)(rand() % CPT_IPT_TogglesPayload::MaxInputToken())} };
+			TrueRemotePlayer2Emulator.LocalMockInputs = { {(uint8_t)(rand() % CPT_IPT_TogglesPayload::MaxInputToken())} };
+		}
 	}
+
+	SystemMultiton::GetRollbackable(TrueRemotePlayer2.SystemIndex).ForceResetAndCleanup();
+	SystemMultiton::GetRollbackable(TrueLocalPlayer1.SystemIndex).ForceResetAndCleanup();
 
 	return true;
 }
