@@ -167,6 +167,9 @@ protected:
 class TEST_Player final
 {
 	static std::set<TEST_Player*> PlayersInternal;
+	static uint32_t DebugIdCounter;
+
+	uint32_t DebugId = 0;
 
 	TEST_CPT_IPT_Emulator EmulatorInternal;
 	TEST_CPT_RB_SaveStates SaveStatesInternal;
@@ -193,17 +196,20 @@ public:
 		return EmulatorInternal;
 	}
 
-	void Activate(const DATA_Player Owner)
+	void Activate(const I_RB_Rollbackable::ActivateEvent Activation)
 	{
+		DebugId = DebugIdCounter++;
+
 		PlayersInternal.insert(this);
 
-		EmulatorInternal.ActivateNow(Owner);
-		SaveStatesInternal.ActivateNow(Owner);
-		SimulatorInternal.ActivateNow(Owner);
+		assert(EmulatorInternal.ActivateInPast(Activation) == ABS_RB_Rollbackable::RegisterSuccess_E::Registered);
+		assert(SaveStatesInternal.ActivateInPast(Activation) == ABS_RB_Rollbackable::RegisterSuccess_E::Registered);
+		assert(SimulatorInternal.ActivateInPast(Activation) == ABS_RB_Rollbackable::RegisterSuccess_E::Registered);
 	}
 };
 
 std::set<TEST_Player*> TEST_Player::PlayersInternal;
+uint32_t TEST_Player::DebugIdCounter = 0;
 
 namespace TEST_NSPC_Systems
 {
@@ -215,6 +221,20 @@ static void SyncWithRemoteFrameIndex(const uint8_t SystemIndex, const uint16_t S
 {
 	SystemMultiton::GetRollbackable(SystemIndex).SyncWithRemoteFrameIndex(StartFrameIndex);
 	SystemIndexes.insert(SystemIndex);
+}
+
+static void Refresh()
+{
+	for (auto SystemIndex : SystemIndexes)
+	{
+		auto CurrentFrameIndex = SystemMultiton::GetRollbackable(SystemIndex).UnsimulatedFrameIndex();
+
+		std::cout << "%%%%%%%%%%%% REFRESH SYSTEM " + std::to_string(SystemIndex) + " - FRAME " + std::to_string(CurrentFrameIndex) + " %%%%%%%%%%%%" << std::endl << std::endl;
+
+		SystemMultiton::GetRollbackable(SystemIndex).Refresh();
+
+		std::cout << "%%%%%%%%%%%% %%%%%%%%%%%% %%%%%%%%%%%% %%%%%%%%%%%%" << std::endl << std::endl;
+	}
 }
 
 static void TransferLocalPlayersInputs()
@@ -300,7 +320,7 @@ bool Test1Local2RemoteMockRollback(const bool UseFakeRollback, const bool UseRan
 	const uint16_t FrameAdvantageInFrames = 3;
 	assert(RemoteStartFrameIndex + FrameAdvantageInFrames + 1 < Config.RollbackBufferMaxSize());
 	const uint16_t FrameDurationDivider = 2;
-	const size_t MockIterationsCount = 30 * FrameDurationDivider;
+	const size_t MockIterationsCount = 60 * FrameDurationDivider;
 
 	TEST_Player TrueLocalPlayer1(UseRandomInputs);
 	TEST_Player LocalPlayer2(UseRandomInputs);
@@ -309,27 +329,38 @@ bool Test1Local2RemoteMockRollback(const bool UseFakeRollback, const bool UseRan
 
 	TEST_NSPC_Systems::MockIterationIndex = LocalStartFrameIndex * FrameDurationDivider;
 
+	const uint16_t TrueStartMockIterationIndex = RemoteStartFrameIndex * FrameDurationDivider;
 	const uint16_t RemoteStartMockIterationIndex = (RemoteStartFrameIndex + FrameAdvantageInFrames) * FrameDurationDivider;
 
 	TEST_NSPC_Systems::SyncWithRemoteFrameIndex(TrueLocalPlayer1Identity.SystemIndex, LocalStartFrameIndex);
 
-	TrueLocalPlayer1.Activate(TrueLocalPlayer1Identity);
+	TrueLocalPlayer1.Activate({ TrueLocalPlayer1Identity, LocalStartFrameIndex });
 
 	srand(0);
 
 	for (; TEST_NSPC_Systems::MockIterationIndex < LocalStartFrameIndex * FrameDurationDivider + (uint16_t)MockIterationsCount; TEST_NSPC_Systems::MockIterationIndex++)
 	{
-		if (RemoteStartFrameIndex == SystemMultiton::GetRollbackable(TrueLocalPlayer1Identity.SystemIndex).UnsimulatedFrameIndex() && !TrueRemotePlayer2.Emulator().ExistsAtFrame(RemoteStartFrameIndex))
+		if (TEST_NSPC_Systems::MockIterationIndex == TrueStartMockIterationIndex)
 		{
-			LocalPlayer2.Activate(LocalPlayer2Identity);
-
 			TEST_NSPC_Systems::SyncWithRemoteFrameIndex(TrueRemotePlayer2Identity.SystemIndex, RemoteStartFrameIndex);
 
-			RemotePlayer1.Activate(RemotePlayer1Identity);
-			TrueRemotePlayer2.Activate(TrueRemotePlayer2Identity);
+			TrueRemotePlayer2.Activate({ TrueRemotePlayer2Identity,  RemoteStartFrameIndex });
+		}
+
+		if (TEST_NSPC_Systems::MockIterationIndex == RemoteStartMockIterationIndex)
+		{
+			RemotePlayer1.Activate({RemotePlayer1Identity,  RemoteStartFrameIndex });
+			LocalPlayer2.Activate({LocalPlayer2Identity,  RemoteStartFrameIndex });
+
+			TEST_NSPC_Systems::Refresh();
+			// Necessary to properly initialize the starting inputs and avoid triggering starvation
+			TEST_NSPC_Systems::TransferLocalPlayersInputs();
 		}
 		
-		TEST_NSPC_Systems::TransferLocalPlayersInputs();
+		if (TEST_NSPC_Systems::MockIterationIndex % (ReceiveRemoteIntervalInFrames * FrameDurationDivider) == 0 && TEST_NSPC_Systems::MockIterationIndex > RemoteStartMockIterationIndex)
+		{
+			TEST_NSPC_Systems::TransferLocalPlayersInputs();
+		}
 
 		TEST_NSPC_Systems::TryTickingToNextFrame(DATA_CFG::Get().SimulationConfiguration.FrameDurationInSeconds / FrameDurationDivider);
 	}
