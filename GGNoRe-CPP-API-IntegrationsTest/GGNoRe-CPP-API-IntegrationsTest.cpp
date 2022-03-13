@@ -8,20 +8,42 @@
 
 #include <functional>
 #include <iostream>
+#include <set>
 #include <stdlib.h>
 
 using namespace GGNoRe::API;
 
 class TEST_CPT_IPT_Emulator final : public ABS_CPT_IPT_Emulator
 {
-public:
 	std::set<uint8_t> LocalMockInputs;
-	std::function<void(const std::vector<uint8_t>&)> RemoteDownloadInputs;
+	const bool UseRandomInputs = false;
+
+	std::vector<uint8_t> Inputs;
+
+public:
+	explicit TEST_CPT_IPT_Emulator(const bool UseRandomInputs)
+		:UseRandomInputs(UseRandomInputs)
+	{
+	}
+
+	const std::vector<uint8_t>& LatestInputs() const
+	{
+		assert(!Inputs.empty());
+		return Inputs;
+	}
+
+	bool ShouldSendInputsToTarget(const uint8_t TargetSystemIndex) const
+	{
+		assert(HasActivationState());
+		assert(LastActivationState().IsActive);
+
+		return LastActivationState().Owner.IsLocal && LastActivationState().Owner.SystemIndex != TargetSystemIndex;
+	}
 
 	~TEST_CPT_IPT_Emulator() { ResetAndCleanup(); }
 
 protected:
-	void OnActivate(const ActivateEvent Activation) override {}
+	void OnActivate(const ActivateEvent Activation) override { LocalMockInputs = { { (uint8_t)Activation.Owner.Id }, {10}, {20} }; }
 	void OnDeactivate(const DeactivateEvent Deactivation) override {}
 
 	void OnRollActivationBack(const DATA_Player Owner) override {}
@@ -43,32 +65,35 @@ protected:
 
 	const std::set<uint8_t>& OnPollLocalInputs() override
 	{
+		if (UseRandomInputs)
+		{
+			LocalMockInputs = { {(uint8_t)(rand() % CPT_IPT_TogglesPayload::MaxInputToken())} };
+		}
+
 		return LocalMockInputs;
 	}
 
 	void OnReadyToSendInputs(const std::vector<uint8_t>& BinaryPayload) override
 	{
-		RemoteDownloadInputs(BinaryPayload);
+		Inputs = BinaryPayload;
 	}
 
-	void ResetAndCleanup() override {}
+	void ResetAndCleanup() override
+	{
+		Inputs.clear();
+		LocalMockInputs.clear();
+	}
 };
 
-class TEST_CPT_RB_Simulator;
 class TEST_CPT_RB_SaveStates final : public ABS_CPT_RB_SaveStates
 {
-	friend class TEST_CPT_RB_Simulator;
 	uint8_t Counter = 0;
 
 public:
-	TEST_CPT_RB_SaveStates(uint8_t Counter)
-		:ABS_CPT_RB_SaveStates(), Counter(Counter)
-	{}
-
 	~TEST_CPT_RB_SaveStates() { ResetAndCleanup(); }
 
 protected:
-	void OnActivate(const ActivateEvent Activation) override {}
+	void OnActivate(const ActivateEvent Activation) override { Counter = (uint8_t)Activation.FrameIndex; }
 	void OnDeactivate(const DeactivateEvent Deactivation) override {}
 
 	void OnRollActivationBack(const DATA_Player Owner) override {}
@@ -81,7 +106,7 @@ protected:
 	void OnPostSaveFrame(const uint16_t SavedFrameIndex) override {}
 
 	void OnPreSimulate(const uint16_t SimulatedFrameIndex) override {}
-	void OnSimulate(const uint16_t SimulatedFrameIndex, const std::set<uint8_t>& Inputs) override {}
+	void OnSimulate(const uint16_t SimulatedFrameIndex, const std::set<uint8_t>& Inputs) override { Counter++; }
 
 	void OnStarvedForInputFrame(const uint16_t FrameIndex) override {}
 	void OnStallAdvantageFrame(const uint16_t FrameIndex) override {}
@@ -104,17 +129,15 @@ protected:
 		}
 	}
 
-	void ResetAndCleanup() override {}
+	void ResetAndCleanup() override
+	{
+		Counter = 0;
+	}
 };
 
 class TEST_CPT_RB_Simulator final : public ABS_CPT_RB_Simulator
 {
-	TEST_CPT_RB_SaveStates& SaveStates;
 public:
-	TEST_CPT_RB_Simulator(TEST_CPT_RB_SaveStates& SaveStates)
-		:SaveStates(SaveStates)
-	{}
-
 	~TEST_CPT_RB_Simulator() { ResetAndCleanup(); }
 
 protected:
@@ -131,7 +154,7 @@ protected:
 	void OnPostSaveFrame(const uint16_t SavedFrameIndex) override {}
 
 	void OnPreSimulate(const uint16_t SimulatedFrameIndex) override {}
-	void OnSimulate(const uint16_t SimulatedFrameIndex, const std::set<uint8_t>& Inputs) override { SaveStates.Counter++; }
+	void OnSimulate(const uint16_t SimulatedFrameIndex, const std::set<uint8_t>& Inputs) override { }
 
 	void OnStarvedForInputFrame(const uint16_t FrameIndex) override {}
 	void OnStallAdvantageFrame(const uint16_t FrameIndex) override {}
@@ -141,138 +164,177 @@ protected:
 	void ResetAndCleanup() override {}
 };
 
-void LogSuccess(ABS_RB_Rollbackable::SINGLETON::TickSuccess_E Success, std::string SystemName, uint16_t IterationIndex)
+class TEST_Player final
 {
-	switch (Success)
+	static std::set<TEST_Player*> PlayersInternal;
+
+	TEST_CPT_IPT_Emulator EmulatorInternal;
+	TEST_CPT_RB_SaveStates SaveStatesInternal;
+	TEST_CPT_RB_Simulator SimulatorInternal;
+
+public:
+	explicit TEST_Player(const bool UseRandomInputs)
+		:EmulatorInternal(UseRandomInputs)
 	{
-	case ABS_RB_Rollbackable::SINGLETON::TickSuccess_E::StallAdvantage:
-		std::cout << "^^^^^^^^^^^^ " + SystemName + " STALLING - ITERATION " + std::to_string(IterationIndex)  +" ^^^^^^^^^^^^" << std::endl << std::endl;
-			break;
-	case ABS_RB_Rollbackable::SINGLETON::TickSuccess_E::StarvedForInput:
-		std::cout << "^^^^^^^^^^^^ " + SystemName + " STARVED - ITERATION " + std::to_string(IterationIndex)  +" ^^^^^^^^^^^^" << std::endl << std::endl;
-			break;
-	case ABS_RB_Rollbackable::SINGLETON::TickSuccess_E::StayCurrent:
-		std::cout << "^^^^^^^^^^^^ " + SystemName + " STAY - ITERATION " + std::to_string(IterationIndex)  +" ^^^^^^^^^^^^" << std::endl << std::endl;
-			break;
-	case ABS_RB_Rollbackable::SINGLETON::TickSuccess_E::ToNext:
-		std::cout << "^^^^^^^^^^^^ " + SystemName + " NEXT - ITERATION " + std::to_string(IterationIndex)  +" ^^^^^^^^^^^^" << std::endl << std::endl;
-			break;
-	default:
-		std::cout << "^^^^^^^^^^^^ " + SystemName + " DEFAULT - ITERATION " + std::to_string(IterationIndex)  +" ^^^^^^^^^^^" << std::endl << std::endl;
-		break;
+	}
+
+	~TEST_Player()
+	{
+		PlayersInternal.erase(this);
+	}
+
+	static const std::set<TEST_Player*>& Players()
+	{
+		return PlayersInternal;
+	}
+
+	const TEST_CPT_IPT_Emulator& Emulator() const
+	{
+		return EmulatorInternal;
+	}
+
+	void Activate(const DATA_Player Owner)
+	{
+		PlayersInternal.insert(this);
+
+		EmulatorInternal.ActivateNow(Owner);
+		SaveStatesInternal.ActivateNow(Owner);
+		SimulatorInternal.ActivateNow(Owner);
+	}
+};
+
+std::set<TEST_Player*> TEST_Player::PlayersInternal;
+
+namespace TEST_NSPC_Systems
+{
+
+std::set<uint8_t> SystemIndexes;
+uint16_t MockIterationIndex = 0;
+
+static void SyncWithRemoteFrameIndex(const uint8_t SystemIndex, const uint16_t StartFrameIndex)
+{
+	SystemMultiton::GetRollbackable(SystemIndex).SyncWithRemoteFrameIndex(StartFrameIndex);
+	SystemIndexes.insert(SystemIndex);
+}
+
+static void TransferLocalPlayersInputs()
+{
+	for (auto SystemIndex : SystemIndexes)
+	{
+		auto CurrentFrameIndex = SystemMultiton::GetRollbackable(SystemIndex).UnsimulatedFrameIndex();
+
+		std::cout << "############ INPUT TRANSFER TO SYSTEM " + std::to_string(SystemIndex) + " - FRAME " + std::to_string(CurrentFrameIndex) + " ############" << std::endl << std::endl;
+
+		for (auto Player : TEST_Player::Players())
+		{
+			if (Player->Emulator().ShouldSendInputsToTarget(SystemIndex))
+			{
+				assert(SystemMultiton::GetEmulator(SystemIndex).DownloadRemotePlayerBinary(Player->Emulator().LatestInputs().data()) == ABS_CPT_IPT_Emulator::SINGLETON::DownloadSuccess_E::Success);
+			}
+		}
+
+		std::cout << "############ ############ ############ ############" << std::endl << std::endl;
 	}
 }
 
-bool TestRemoteMockRollback(const bool UseFakeRollback, const bool UseRandomInputs)
+static void TryTickingToNextFrame(float DeltaDurationInSeconds)
+{
+	for (auto SystemIndex : SystemIndexes)
+	{
+		std::cout << "____________ SYSTEM " + std::to_string(SystemIndex) + " START - ITERATION " + std::to_string(MockIterationIndex) + " ____________" << std::endl << std::endl;
+
+		auto Success = SystemMultiton::GetRollbackable(SystemIndex).TryTickingToNextFrame(DeltaDurationInSeconds);
+
+		switch (Success)
+		{
+		case ABS_RB_Rollbackable::SINGLETON::TickSuccess_E::StallAdvantage:
+			std::cout << "^^^^^^^^^^^^ SYSTEM " + std::to_string(SystemIndex) + " STALLING - ITERATION " + std::to_string(MockIterationIndex) + " ^^^^^^^^^^^^" << std::endl << std::endl;
+			break;
+		case ABS_RB_Rollbackable::SINGLETON::TickSuccess_E::StarvedForInput:
+			std::cout << "^^^^^^^^^^^^ SYSTEM " + std::to_string(SystemIndex) + " STARVED - ITERATION " + std::to_string(MockIterationIndex) + " ^^^^^^^^^^^^" << std::endl << std::endl;
+			assert(false);
+			break;
+		case ABS_RB_Rollbackable::SINGLETON::TickSuccess_E::StayCurrent:
+			std::cout << "^^^^^^^^^^^^ SYSTEM " + std::to_string(SystemIndex) + " STAY - ITERATION " + std::to_string(MockIterationIndex) + " ^^^^^^^^^^^^" << std::endl << std::endl;
+			break;
+		case ABS_RB_Rollbackable::SINGLETON::TickSuccess_E::ToNext:
+			std::cout << "^^^^^^^^^^^^ SYSTEM " + std::to_string(SystemIndex) + " NEXT - ITERATION " + std::to_string(MockIterationIndex) + " ^^^^^^^^^^^^" << std::endl << std::endl;
+			break;
+		default:
+			assert(false);
+			break;
+		}
+	}
+}
+
+static void ForceResetAndCleanup()
+{
+	for (auto SystemIndex : SystemIndexes)
+	{
+		SystemMultiton::GetRollbackable(SystemIndex).ForceResetAndCleanup();
+	}
+
+	MockIterationIndex = 0;
+	SystemIndexes.clear();
+}
+
+}
+
+bool Test1Local2RemoteMockRollback(const bool UseFakeRollback, const bool UseRandomInputs)
 {
 	DATA_CFG Config;
 	Config.FakedMissedPredictionsFramesCount *= UseFakeRollback;
 	DATA_CFG::Load(Config);
 
 	const uint16_t LocalStartFrameIndex = 0;
-	const uint16_t RemoteStartFrameIndex = 4;
+	const uint16_t RemoteStartFrameIndex = 2;
 	assert(RemoteStartFrameIndex >= LocalStartFrameIndex);
 
-	const DATA_Player TrueLocalPlayer1{ 0, true, LocalStartFrameIndex, 0 };
-	const DATA_Player LocalPlayer2{ TrueLocalPlayer1.Id + 1, false, RemoteStartFrameIndex, TrueLocalPlayer1.SystemIndex };
+	const DATA_Player TrueLocalPlayer1Identity{ 0, true, LocalStartFrameIndex, 0 };
+	const DATA_Player LocalPlayer2Identity{ TrueLocalPlayer1Identity.Id + 1, false, RemoteStartFrameIndex, TrueLocalPlayer1Identity.SystemIndex };
 
-	const DATA_Player TrueRemotePlayer2{ LocalPlayer2.Id, true, RemoteStartFrameIndex, uint8_t(LocalPlayer2.SystemIndex + 1) };
-	const DATA_Player RemotePlayer1{ TrueLocalPlayer1.Id, false, RemoteStartFrameIndex, TrueRemotePlayer2.SystemIndex };
+	const DATA_Player TrueRemotePlayer2Identity{ LocalPlayer2Identity.Id, true, RemoteStartFrameIndex, uint8_t(LocalPlayer2Identity.SystemIndex + 1) };
+	const DATA_Player RemotePlayer1Identity{ TrueLocalPlayer1Identity.Id, false, RemoteStartFrameIndex, TrueRemotePlayer2Identity.SystemIndex };
 
 	const uint16_t ReceiveRemoteIntervalInFrames = 3;
-	const uint16_t FrameAdvantageInFrames = 4;
-	assert(RemoteStartFrameIndex + FrameAdvantageInFrames < Config.SaveStatesBufferSize());
+	const uint16_t FrameAdvantageInFrames = 3;
+	assert(RemoteStartFrameIndex + FrameAdvantageInFrames + 1 < Config.RollbackBufferMaxSize());
 	const uint16_t FrameDurationDivider = 2;
-	const size_t MockIterationsCount = 60 * FrameDurationDivider;
+	const size_t MockIterationsCount = 30 * FrameDurationDivider;
 
-	TEST_CPT_IPT_Emulator TrueLocalPlayer1Emulator;
-	TrueLocalPlayer1Emulator.LocalMockInputs = { {0}, {1}, {2} };
-	TEST_CPT_IPT_Emulator LocalPlayer2Emulator;
-	TEST_CPT_RB_SaveStates TrueLocalPlayer1SaveStates(LocalStartFrameIndex);
-	TEST_CPT_RB_SaveStates LocalPlayer2SaveStates(RemoteStartFrameIndex);
-	TEST_CPT_RB_Simulator TrueLocalPlayer1Simulator(TrueLocalPlayer1SaveStates);
-	TEST_CPT_RB_Simulator LocalPlayer2Simulator(LocalPlayer2SaveStates);
+	TEST_Player TrueLocalPlayer1(UseRandomInputs);
+	TEST_Player LocalPlayer2(UseRandomInputs);
+	TEST_Player RemotePlayer1(UseRandomInputs);
+	TEST_Player TrueRemotePlayer2(UseRandomInputs);
 
-	TEST_CPT_IPT_Emulator RemotePlayer1Emulator;
-	TEST_CPT_IPT_Emulator TrueRemotePlayer2Emulator;
-	TrueRemotePlayer2Emulator.LocalMockInputs = { {3}, {2}, {1} };
-	TEST_CPT_RB_SaveStates RemotePlayer1SaveStates(RemoteStartFrameIndex);
-	TEST_CPT_RB_SaveStates TrueRemotePlayer2SaveStates(RemoteStartFrameIndex);
-	TEST_CPT_RB_Simulator RemotePlayer1Simulator(RemotePlayer1SaveStates);
-	TEST_CPT_RB_Simulator TrueRemotePlayer2Simulator(TrueRemotePlayer2SaveStates);
-
-	uint16_t MockIterationIndex = LocalStartFrameIndex * FrameDurationDivider;
-
-	TrueLocalPlayer1Emulator.RemoteDownloadInputs = [&](const std::vector<uint8_t>& BinaryPayload)
-	{
-		if (MockIterationIndex >= RemoteStartFrameIndex * FrameDurationDivider)
-		{
-			SystemMultiton::GetEmulator(TrueRemotePlayer2.SystemIndex).DownloadRemotePlayerBinary(BinaryPayload.data());
-		}
-	};
+	TEST_NSPC_Systems::MockIterationIndex = LocalStartFrameIndex * FrameDurationDivider;
 
 	const uint16_t RemoteStartMockIterationIndex = (RemoteStartFrameIndex + FrameAdvantageInFrames) * FrameDurationDivider;
 
-	TrueRemotePlayer2Emulator.RemoteDownloadInputs = [&](const std::vector<uint8_t>& BinaryPayload)
-	{
-		if (MockIterationIndex >= RemoteStartMockIterationIndex)
-		{
-			// The remainder is 0 when starting a new frame and 1 when ending
-			if ((MockIterationIndex - RemoteStartMockIterationIndex) % (ReceiveRemoteIntervalInFrames * FrameDurationDivider) == 1)
-			{
-				SystemMultiton::GetEmulator(TrueLocalPlayer1.SystemIndex).DownloadRemotePlayerBinary(BinaryPayload.data());
-			}
-		}
-	};
+	TEST_NSPC_Systems::SyncWithRemoteFrameIndex(TrueLocalPlayer1Identity.SystemIndex, LocalStartFrameIndex);
 
-	SystemMultiton::GetRollbackable(TrueLocalPlayer1.SystemIndex).SyncWithRemoteFrameIndex(LocalStartFrameIndex);
-
-	TrueLocalPlayer1Emulator.ActivateNow(TrueLocalPlayer1);
-	TrueLocalPlayer1SaveStates.ActivateNow(TrueLocalPlayer1);
-	TrueLocalPlayer1Simulator.ActivateNow(TrueLocalPlayer1);
+	TrueLocalPlayer1.Activate(TrueLocalPlayer1Identity);
 
 	srand(0);
 
-	bool IsRemoteInitialized = false;
-
-	for (; MockIterationIndex < LocalStartFrameIndex * FrameDurationDivider + (uint16_t)MockIterationsCount; MockIterationIndex++)
+	for (; TEST_NSPC_Systems::MockIterationIndex < LocalStartFrameIndex * FrameDurationDivider + (uint16_t)MockIterationsCount; TEST_NSPC_Systems::MockIterationIndex++)
 	{
-		if (RemoteStartFrameIndex == SystemMultiton::GetRollbackable(TrueLocalPlayer1.SystemIndex).UnsimulatedFrameIndex() && !IsRemoteInitialized)
+		if (RemoteStartFrameIndex == SystemMultiton::GetRollbackable(TrueLocalPlayer1Identity.SystemIndex).UnsimulatedFrameIndex() && !TrueRemotePlayer2.Emulator().ExistsAtFrame(RemoteStartFrameIndex))
 		{
-			IsRemoteInitialized = true;
+			LocalPlayer2.Activate(LocalPlayer2Identity);
 
-			LocalPlayer2Emulator.ActivateNow(LocalPlayer2);
-			LocalPlayer2SaveStates.ActivateNow(LocalPlayer2);
-			LocalPlayer2Simulator.ActivateNow(LocalPlayer2);
+			TEST_NSPC_Systems::SyncWithRemoteFrameIndex(TrueRemotePlayer2Identity.SystemIndex, RemoteStartFrameIndex);
 
-			SystemMultiton::GetRollbackable(TrueRemotePlayer2.SystemIndex).SyncWithRemoteFrameIndex(RemoteStartFrameIndex);
-
-			RemotePlayer1Emulator.ActivateNow(RemotePlayer1);
-			TrueRemotePlayer2Emulator.ActivateNow(TrueRemotePlayer2);
-			RemotePlayer1SaveStates.ActivateNow(RemotePlayer1);
-			TrueRemotePlayer2SaveStates.ActivateNow(TrueRemotePlayer2);
-			RemotePlayer1Simulator.ActivateNow(RemotePlayer1);
-			TrueRemotePlayer2Simulator.ActivateNow(TrueRemotePlayer2);
+			RemotePlayer1.Activate(RemotePlayer1Identity);
+			TrueRemotePlayer2.Activate(TrueRemotePlayer2Identity);
 		}
+		
+		TEST_NSPC_Systems::TransferLocalPlayersInputs();
 
-		auto LocalSuccess = SystemMultiton::GetRollbackable(TrueLocalPlayer1.SystemIndex).TryTickingToNextFrame(DATA_CFG::Get().SimulationConfiguration.FrameDurationInSeconds / FrameDurationDivider);
-		LogSuccess(LocalSuccess, "LOCAL", MockIterationIndex);
-
-		if (MockIterationIndex >= RemoteStartMockIterationIndex)
-		{
-			auto RemoteSuccess = SystemMultiton::GetRollbackable(TrueRemotePlayer2.SystemIndex).TryTickingToNextFrame(DATA_CFG::Get().SimulationConfiguration.FrameDurationInSeconds / FrameDurationDivider);
-			LogSuccess(RemoteSuccess, "REMOTE", MockIterationIndex);
-		}
-
-		if (UseRandomInputs)
-		{
-			TrueLocalPlayer1Emulator.LocalMockInputs = { {(uint8_t)(rand() % CPT_IPT_TogglesPayload::MaxInputToken())} };
-			TrueRemotePlayer2Emulator.LocalMockInputs = { {(uint8_t)(rand() % CPT_IPT_TogglesPayload::MaxInputToken())} };
-		}
+		TEST_NSPC_Systems::TryTickingToNextFrame(DATA_CFG::Get().SimulationConfiguration.FrameDurationInSeconds / FrameDurationDivider);
 	}
 
-	SystemMultiton::GetRollbackable(TrueRemotePlayer2.SystemIndex).ForceResetAndCleanup();
-	SystemMultiton::GetRollbackable(TrueLocalPlayer1.SystemIndex).ForceResetAndCleanup();
+	TEST_NSPC_Systems::ForceResetAndCleanup();
 
 	return true;
 }

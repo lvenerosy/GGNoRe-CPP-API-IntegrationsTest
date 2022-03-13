@@ -6,20 +6,14 @@
 
 #include <assert.h>
 
-bool TestRemoteMockRollback(const bool UseFakeRollback, const bool UseRandomInputs);
-
-// TODO:
-// actor lifetime
-// pooling support
-// more than 2 players
-// Activate/DeactivateInPast
+bool Test1Local2RemoteMockRollback(const bool UseFakeRollback, const bool UseRandomInputs);
 
 int main()
 {
-	assert(TestRemoteMockRollback(false, false));
-	assert(TestRemoteMockRollback(true, false));
-	assert(TestRemoteMockRollback(false, true));
-	assert(TestRemoteMockRollback(true, true));
+	//assert(Test1Local2RemoteMockRollback(false, false));
+	assert(Test1Local2RemoteMockRollback(true, false));
+	//assert(Test1Local2RemoteMockRollback(false, true));
+	//assert(Test1Local2RemoteMockRollback(true, true));
 
 	return 0;
 }
