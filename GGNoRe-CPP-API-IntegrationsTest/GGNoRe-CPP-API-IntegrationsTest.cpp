@@ -43,11 +43,20 @@ public:
 	~TEST_CPT_IPT_Emulator() { ResetAndCleanup(); }
 
 protected:
-	void OnActivate(const ActivateEvent Activation) override { LocalMockInputs = { { (uint8_t)Activation.Owner.Id }, {10}, {20} }; }
-	void OnDeactivate(const DeactivateEvent Deactivation) override {}
+	void OnRegisterActivationChange(const RegisterActivationChangeEvent RegisteredActivationChange, const ActivationChangeEvent ActivationChange) override
+	{
+		assert(RegisteredActivationChange.Success == ABS_RB_Rollbackable::RegisterActivationChangeEvent::RegisterSuccess_E::Registered);
+	}
 
-	void OnRollActivationBack(const DATA_Player Owner) override {}
-	void OnRollDeactivationBack(const DATA_Player Owner) override {}
+	void OnActivationChange(const ActivationChangeEvent ActivationChange) override
+	{
+		if (ActivationChange.Type == ActivationChangeEvent::ChangeType_E::Activate)
+		{
+			LocalMockInputs = { { (uint8_t)ActivationChange.Owner.Id }, {10}, {20} };
+		}
+	}
+
+	void OnRollActivationChangeBack(const ActivationChangeEvent ActivationChange) override {}
 
 	void OnPreRollback(const uint16_t RollbackFrameIndex) override {}
 	void OnRollback(const uint16_t RollbackFrameIndex) override {}
@@ -93,11 +102,20 @@ public:
 	~TEST_CPT_RB_SaveStates() { ResetAndCleanup(); }
 
 protected:
-	void OnActivate(const ActivateEvent Activation) override { Counter = (uint8_t)Activation.FrameIndex; }
-	void OnDeactivate(const DeactivateEvent Deactivation) override {}
+	void OnRegisterActivationChange(const RegisterActivationChangeEvent RegisteredActivationChange, const ActivationChangeEvent ActivationChange) override
+	{
+		assert(RegisteredActivationChange.Success == ABS_RB_Rollbackable::RegisterActivationChangeEvent::RegisterSuccess_E::Registered);
+	}
 
-	void OnRollActivationBack(const DATA_Player Owner) override {}
-	void OnRollDeactivationBack(const DATA_Player Owner) override {}
+	void OnActivationChange(const ActivationChangeEvent ActivationChange) override
+	{
+		if (ActivationChange.Type == ActivationChangeEvent::ChangeType_E::Activate)
+		{
+			Counter = (uint8_t)ActivationChange.FrameIndex;
+		}
+	}
+
+	void OnRollActivationChangeBack(const ActivationChangeEvent ActivationChange) override {}
 
 	void OnPreRollback(const uint16_t RollbackFrameIndex) override {}
 	void OnRollback(const uint16_t RollbackFrameIndex) override {}
@@ -141,11 +159,14 @@ public:
 	~TEST_CPT_RB_Simulator() { ResetAndCleanup(); }
 
 protected:
-	void OnActivate(const ActivateEvent Activation) override {}
-	void OnDeactivate(const DeactivateEvent Deactivation) override {}
+	void OnRegisterActivationChange(const RegisterActivationChangeEvent RegisteredActivationChange, const ActivationChangeEvent ActivationChange) override
+	{
+		assert(RegisteredActivationChange.Success == ABS_RB_Rollbackable::RegisterActivationChangeEvent::RegisterSuccess_E::Registered);
+	}
 
-	void OnRollActivationBack(const DATA_Player Owner) override {}
-	void OnRollDeactivationBack(const DATA_Player Owner) override {}
+	void OnActivationChange(const ActivationChangeEvent ActivationChange) override {}
+
+	void OnRollActivationChangeBack(const ActivationChangeEvent ActivationChange) override {}
 
 	void OnPreRollback(const uint16_t RollbackFrameIndex) override {}
 	void OnRollback(const uint16_t RollbackFrameIndex) override {}
@@ -164,6 +185,8 @@ protected:
 	void ResetAndCleanup() override {}
 };
 
+// This is a player class grouping the 3 components for simplicity's sake
+// In your game it could be a fireball with only save states and a simulator, or a player input controller with only an emulator
 class TEST_Player final
 {
 	static std::set<TEST_Player*> PlayersInternal;
@@ -196,15 +219,30 @@ public:
 		return EmulatorInternal;
 	}
 
-	void Activate(const I_RB_Rollbackable::ActivateEvent Activation)
+	void ActivateNow(const DATA_Player Owner)
 	{
+		assert(PlayersInternal.find(this) == PlayersInternal.cend());
+
 		DebugId = DebugIdCounter++;
 
 		PlayersInternal.insert(this);
 
-		assert(EmulatorInternal.ActivateInPast(Activation) == ABS_RB_Rollbackable::RegisterSuccess_E::Registered);
-		assert(SaveStatesInternal.ActivateInPast(Activation) == ABS_RB_Rollbackable::RegisterSuccess_E::Registered);
-		assert(SimulatorInternal.ActivateInPast(Activation) == ABS_RB_Rollbackable::RegisterSuccess_E::Registered);
+		EmulatorInternal.ChangeActivationNow(Owner, I_RB_Rollbackable::ActivationChangeEvent::ChangeType_E::Activate);
+		SaveStatesInternal.ChangeActivationNow(Owner, I_RB_Rollbackable::ActivationChangeEvent::ChangeType_E::Activate);
+		SimulatorInternal.ChangeActivationNow(Owner, I_RB_Rollbackable::ActivationChangeEvent::ChangeType_E::Activate);
+	}
+
+	void ActivateInPast(const I_RB_Rollbackable::ActivationChangeEvent Activation)
+	{
+		assert(PlayersInternal.find(this) == PlayersInternal.cend());
+
+		DebugId = DebugIdCounter++;
+
+		PlayersInternal.insert(this);
+
+		EmulatorInternal.ChangeActivationInPast(Activation);
+		SaveStatesInternal.ChangeActivationInPast(Activation);
+		SimulatorInternal.ChangeActivationInPast(Activation);
 	}
 };
 
@@ -219,22 +257,10 @@ uint16_t MockIterationIndex = 0;
 
 static void SyncWithRemoteFrameIndex(const uint8_t SystemIndex, const uint16_t StartFrameIndex)
 {
+	assert(SystemIndexes.find(SystemIndex) == SystemIndexes.cend());
+
 	SystemMultiton::GetRollbackable(SystemIndex).SyncWithRemoteFrameIndex(StartFrameIndex);
 	SystemIndexes.insert(SystemIndex);
-}
-
-static void Refresh()
-{
-	for (auto SystemIndex : SystemIndexes)
-	{
-		auto CurrentFrameIndex = SystemMultiton::GetRollbackable(SystemIndex).UnsimulatedFrameIndex();
-
-		std::cout << "%%%%%%%%%%%% REFRESH SYSTEM " + std::to_string(SystemIndex) + " - FRAME " + std::to_string(CurrentFrameIndex) + " %%%%%%%%%%%%" << std::endl << std::endl;
-
-		SystemMultiton::GetRollbackable(SystemIndex).Refresh();
-
-		std::cout << "%%%%%%%%%%%% %%%%%%%%%%%% %%%%%%%%%%%% %%%%%%%%%%%%" << std::endl << std::endl;
-	}
 }
 
 static void TransferLocalPlayersInputs()
@@ -334,7 +360,7 @@ bool Test1Local2RemoteMockRollback(const bool UseFakeRollback, const bool UseRan
 
 	TEST_NSPC_Systems::SyncWithRemoteFrameIndex(TrueLocalPlayer1Identity.SystemIndex, LocalStartFrameIndex);
 
-	TrueLocalPlayer1.Activate({ TrueLocalPlayer1Identity, LocalStartFrameIndex });
+	TrueLocalPlayer1.ActivateNow(TrueLocalPlayer1Identity);
 
 	srand(0);
 
@@ -344,15 +370,14 @@ bool Test1Local2RemoteMockRollback(const bool UseFakeRollback, const bool UseRan
 		{
 			TEST_NSPC_Systems::SyncWithRemoteFrameIndex(TrueRemotePlayer2Identity.SystemIndex, RemoteStartFrameIndex);
 
-			TrueRemotePlayer2.Activate({ TrueRemotePlayer2Identity,  RemoteStartFrameIndex });
+			TrueRemotePlayer2.ActivateNow(TrueRemotePlayer2Identity);
 		}
 
 		if (TEST_NSPC_Systems::MockIterationIndex == RemoteStartMockIterationIndex)
 		{
-			RemotePlayer1.Activate({RemotePlayer1Identity,  RemoteStartFrameIndex });
-			LocalPlayer2.Activate({LocalPlayer2Identity,  RemoteStartFrameIndex });
+			RemotePlayer1.ActivateInPast({ I_RB_Rollbackable::ActivationChangeEvent::ChangeType_E::Activate, RemotePlayer1Identity,  RemoteStartFrameIndex });
+			LocalPlayer2.ActivateInPast({ I_RB_Rollbackable::ActivationChangeEvent::ChangeType_E::Activate, LocalPlayer2Identity,  RemoteStartFrameIndex });
 
-			TEST_NSPC_Systems::Refresh();
 			// Necessary to properly initialize the starting inputs and avoid triggering starvation
 			TEST_NSPC_Systems::TransferLocalPlayersInputs();
 		}
