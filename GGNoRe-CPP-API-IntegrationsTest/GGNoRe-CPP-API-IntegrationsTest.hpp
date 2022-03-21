@@ -6,7 +6,7 @@
 
 #include <assert.h>
 
-bool Test1Local2RemoteMockRollback(const bool UseFakeRollback, const bool UseRandomInputs);
+bool Test1Local2RemoteMockRollback(const bool ForceMaximumRollback, const bool UseRandomInputs);
 
 int main()
 {

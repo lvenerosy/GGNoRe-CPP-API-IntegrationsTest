@@ -15,6 +15,8 @@ using namespace GGNoRe::API;
 
 class TEST_CPT_IPT_Emulator final : public ABS_CPT_IPT_Emulator
 {
+	DATA_Player OwnerInternal;
+
 	std::set<uint8_t> LocalMockInputs;
 	const bool UseRandomInputs = false;
 
@@ -26,6 +28,8 @@ public:
 	{
 	}
 
+	DATA_Player Owner() const { return OwnerInternal; }
+
 	const std::vector<uint8_t>& LatestInputs() const
 	{
 		assert(!Inputs.empty());
@@ -34,10 +38,7 @@ public:
 
 	bool ShouldSendInputsToTarget(const uint8_t TargetSystemIndex) const
 	{
-		assert(HasActivationState());
-		assert(LastActivationState().IsActive);
-
-		return LastActivationState().Owner.IsLocal && LastActivationState().Owner.SystemIndex != TargetSystemIndex;
+		return OwnerInternal.SystemIndex != TargetSystemIndex && OwnerInternal.IsLocal && !Inputs.empty();
 	}
 
 	~TEST_CPT_IPT_Emulator() { ResetAndCleanup(); }
@@ -46,6 +47,9 @@ protected:
 	void OnRegisterActivationChange(const RegisterActivationChangeEvent RegisteredActivationChange, const ActivationChangeEvent ActivationChange) override
 	{
 		assert(RegisteredActivationChange.Success == ABS_RB_Rollbackable::RegisterActivationChangeEvent::RegisterSuccess_E::Registered);
+
+		// Both OnRegisterActivationChange and ShouldSendInputsToTarget happen outside of the simulation so they can be properly ordered so that the owner is valid
+		OwnerInternal = ActivationChange.Owner;
 	}
 
 	void OnActivationChange(const ActivationChangeEvent ActivationChange) override
@@ -269,17 +273,14 @@ static void TransferLocalPlayersInputs()
 	{
 		auto CurrentFrameIndex = SystemMultiton::GetRollbackable(SystemIndex).UnsimulatedFrameIndex();
 
-		std::cout << "############ INPUT TRANSFER TO SYSTEM " + std::to_string(SystemIndex) + " - FRAME " + std::to_string(CurrentFrameIndex) + " ############" << std::endl << std::endl;
-
 		for (auto Player : TEST_Player::Players())
 		{
 			if (Player->Emulator().ShouldSendInputsToTarget(SystemIndex))
 			{
+				std::cout << "############ INPUT TRANSFER FROM PLAYER " + std::to_string(Player->Emulator().Owner().Id) + " TO SYSTEM " + std::to_string(SystemIndex) + " - FRAME " + std::to_string(CurrentFrameIndex) + " ############" << std::endl << std::endl;
 				assert(SystemMultiton::GetEmulator(SystemIndex).DownloadRemotePlayerBinary(Player->Emulator().LatestInputs().data()) == ABS_CPT_IPT_Emulator::SINGLETON::DownloadSuccess_E::Success);
 			}
 		}
-
-		std::cout << "############ ############ ############ ############" << std::endl << std::endl;
 	}
 }
 
@@ -326,10 +327,10 @@ static void ForceResetAndCleanup()
 
 }
 
-bool Test1Local2RemoteMockRollback(const bool UseFakeRollback, const bool UseRandomInputs)
+bool Test1Local2RemoteMockRollback(const bool ForceMaximumRollback, const bool UseRandomInputs)
 {
 	DATA_CFG Config;
-	Config.FakedMissedPredictionsFramesCount *= UseFakeRollback;
+	Config.ForceMaximumRollback = ForceMaximumRollback;
 	DATA_CFG::Load(Config);
 
 	const uint16_t LocalStartFrameIndex = 0;
@@ -343,6 +344,7 @@ bool Test1Local2RemoteMockRollback(const bool UseFakeRollback, const bool UseRan
 	const DATA_Player RemotePlayer1Identity{ TrueLocalPlayer1Identity.Id, false, RemoteStartFrameIndex, TrueRemotePlayer2Identity.SystemIndex };
 
 	const uint16_t ReceiveRemoteIntervalInFrames = 3;
+	assert(ReceiveRemoteIntervalInFrames > 0);
 	const uint16_t FrameAdvantageInFrames = 3;
 	assert(RemoteStartFrameIndex + FrameAdvantageInFrames + 1 < Config.RollbackBufferMaxSize());
 	const uint16_t FrameDurationDivider = 2;
@@ -378,7 +380,6 @@ bool Test1Local2RemoteMockRollback(const bool UseFakeRollback, const bool UseRan
 			RemotePlayer1.ActivateInPast({ I_RB_Rollbackable::ActivationChangeEvent::ChangeType_E::Activate, RemotePlayer1Identity,  RemoteStartFrameIndex });
 			LocalPlayer2.ActivateInPast({ I_RB_Rollbackable::ActivationChangeEvent::ChangeType_E::Activate, LocalPlayer2Identity,  RemoteStartFrameIndex });
 
-			// Necessary to properly initialize the starting inputs and avoid triggering starvation
 			TEST_NSPC_Systems::TransferLocalPlayersInputs();
 		}
 		
