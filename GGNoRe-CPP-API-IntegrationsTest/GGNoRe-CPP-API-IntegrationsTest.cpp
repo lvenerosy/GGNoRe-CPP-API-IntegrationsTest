@@ -4,14 +4,19 @@
 
 #include <GGNoRe-CPP-API-IntegrationsTest.hpp>
 
-#include <GGNoRe-CPP-API.hpp>
-
 #include <functional>
-#include <iostream>
 #include <set>
 #include <stdlib.h>
+#include <utility>
 
 using namespace GGNoRe::API;
+
+static void TestLog(const std::string& Message)
+{
+#if GGNORECPPAPI_LOG
+	std::cout << Message << std::endl << std::endl;
+#endif
+}
 
 class TEST_CPT_IPT_Emulator final : public ABS_CPT_IPT_Emulator
 {
@@ -277,35 +282,35 @@ static void TransferLocalPlayersInputs()
 		{
 			if (Player->Emulator().ShouldSendInputsToTarget(SystemIndex))
 			{
-				std::cout << "############ INPUT TRANSFER FROM PLAYER " + std::to_string(Player->Emulator().Owner().Id) + " TO SYSTEM " + std::to_string(SystemIndex) + " - FRAME " + std::to_string(CurrentFrameIndex) + " ############" << std::endl << std::endl;
+				TestLog("############ INPUT TRANSFER FROM PLAYER " + std::to_string(Player->Emulator().Owner().Id) + " TO SYSTEM " + std::to_string(SystemIndex) + " - FRAME " + std::to_string(CurrentFrameIndex) + " ############");
 				assert(SystemMultiton::GetEmulator(SystemIndex).DownloadRemotePlayerBinary(Player->Emulator().LatestInputs().data()) == ABS_CPT_IPT_Emulator::SINGLETON::DownloadSuccess_E::Success);
 			}
 		}
 	}
 }
 
-static void TryTickingToNextFrame(float DeltaDurationInSeconds)
+static void TryTickingToNextFrame(float DeltaDurationInSeconds, const bool AllowStarvation)
 {
 	for (auto SystemIndex : SystemIndexes)
 	{
-		std::cout << "____________ SYSTEM " + std::to_string(SystemIndex) + " START - ITERATION " + std::to_string(MockIterationIndex) + " ____________" << std::endl << std::endl;
+		TestLog("____________ SYSTEM " + std::to_string(SystemIndex) + " START - ITERATION " + std::to_string(MockIterationIndex) + " ____________");
 
 		auto Success = SystemMultiton::GetRollbackable(SystemIndex).TryTickingToNextFrame(DeltaDurationInSeconds);
 
 		switch (Success)
 		{
 		case ABS_RB_Rollbackable::SINGLETON::TickSuccess_E::StallAdvantage:
-			std::cout << "^^^^^^^^^^^^ SYSTEM " + std::to_string(SystemIndex) + " STALLING - ITERATION " + std::to_string(MockIterationIndex) + " ^^^^^^^^^^^^" << std::endl << std::endl;
+			TestLog("^^^^^^^^^^^^ SYSTEM " + std::to_string(SystemIndex) + " STALLING - ITERATION " + std::to_string(MockIterationIndex) + " ^^^^^^^^^^^^");
 			break;
 		case ABS_RB_Rollbackable::SINGLETON::TickSuccess_E::StarvedForInput:
-			std::cout << "^^^^^^^^^^^^ SYSTEM " + std::to_string(SystemIndex) + " STARVED - ITERATION " + std::to_string(MockIterationIndex) + " ^^^^^^^^^^^^" << std::endl << std::endl;
-			assert(false);
+			TestLog("^^^^^^^^^^^^ SYSTEM " + std::to_string(SystemIndex) + " STARVED - ITERATION " + std::to_string(MockIterationIndex) + " ^^^^^^^^^^^^");
+			assert(AllowStarvation);
 			break;
 		case ABS_RB_Rollbackable::SINGLETON::TickSuccess_E::StayCurrent:
-			std::cout << "^^^^^^^^^^^^ SYSTEM " + std::to_string(SystemIndex) + " STAY - ITERATION " + std::to_string(MockIterationIndex) + " ^^^^^^^^^^^^" << std::endl << std::endl;
+			TestLog("^^^^^^^^^^^^ SYSTEM " + std::to_string(SystemIndex) + " STAY - ITERATION " + std::to_string(MockIterationIndex) + " ^^^^^^^^^^^^");
 			break;
 		case ABS_RB_Rollbackable::SINGLETON::TickSuccess_E::ToNext:
-			std::cout << "^^^^^^^^^^^^ SYSTEM " + std::to_string(SystemIndex) + " NEXT - ITERATION " + std::to_string(MockIterationIndex) + " ^^^^^^^^^^^^" << std::endl << std::endl;
+			TestLog("^^^^^^^^^^^^ SYSTEM " + std::to_string(SystemIndex) + " NEXT - ITERATION " + std::to_string(MockIterationIndex) + " ^^^^^^^^^^^^");
 			break;
 		default:
 			assert(false);
@@ -327,46 +332,47 @@ static void ForceResetAndCleanup()
 
 }
 
-bool Test1Local2RemoteMockRollback(const bool ForceMaximumRollback, const bool UseRandomInputs)
+bool Test1Local2RemoteMockRollback(const DATA_CFG Config, const TestEnvironment Environment, const PlayersSetup Setup)
 {
-	DATA_CFG Config;
-	Config.ForceMaximumRollback = ForceMaximumRollback;
+	assert(Environment.ReceiveRemoteIntervalInFrames > 0);
+	assert(Environment.MockHardwareFrameDurationInSeconds > 0.f);
+
 	DATA_CFG::Load(Config);
 
-	const uint16_t LocalStartFrameIndex = 0;
-	const uint16_t RemoteStartFrameIndex = 2;
-	assert(RemoteStartFrameIndex >= LocalStartFrameIndex);
+	const uint16_t RemoteStartFrameIndex = Setup.LocalStartFrameIndex + Setup.RemoteStartOffsetInFrames;
+	const bool AllowStarvation = Environment.ReceiveRemoteIntervalInFrames > Config.RollbackBufferMaxSize() || Environment.FrameAdvantageInFrames > Config.RollbackBufferMaxSize();
 
-	const DATA_Player TrueLocalPlayer1Identity{ 0, true, LocalStartFrameIndex, 0 };
+	const DATA_Player TrueLocalPlayer1Identity{ 0, true, Setup.LocalStartFrameIndex, 0 };
 	const DATA_Player LocalPlayer2Identity{ TrueLocalPlayer1Identity.Id + 1, false, RemoteStartFrameIndex, TrueLocalPlayer1Identity.SystemIndex };
 
 	const DATA_Player TrueRemotePlayer2Identity{ LocalPlayer2Identity.Id, true, RemoteStartFrameIndex, uint8_t(LocalPlayer2Identity.SystemIndex + 1) };
 	const DATA_Player RemotePlayer1Identity{ TrueLocalPlayer1Identity.Id, false, RemoteStartFrameIndex, TrueRemotePlayer2Identity.SystemIndex };
 
-	const uint16_t ReceiveRemoteIntervalInFrames = 3;
-	assert(ReceiveRemoteIntervalInFrames > 0);
-	const uint16_t FrameAdvantageInFrames = 3;
-	assert(RemoteStartFrameIndex + FrameAdvantageInFrames + 1 < Config.RollbackBufferMaxSize());
-	const uint16_t FrameDurationDivider = 2;
-	const size_t MockIterationsCount = 60 * FrameDurationDivider;
+	const auto FrameToIteration = [Config, Environment](const uint16_t FrameIndex) -> uint16_t
+	{
+		// TODO: ensure that this is not undefined behavior
+		return uint16_t(float(FrameIndex) * Config.SimulationConfiguration.FrameDurationInSeconds / Environment.MockHardwareFrameDurationInSeconds);
+	};
 
-	TEST_Player TrueLocalPlayer1(UseRandomInputs);
-	TEST_Player LocalPlayer2(UseRandomInputs);
-	TEST_Player RemotePlayer1(UseRandomInputs);
-	TEST_Player TrueRemotePlayer2(UseRandomInputs);
+	const size_t MockIterationsCount = FrameToIteration(uint16_t(Environment.TestDurationInFrames));
 
-	TEST_NSPC_Systems::MockIterationIndex = LocalStartFrameIndex * FrameDurationDivider;
+	TEST_Player TrueLocalPlayer1(Setup.UseRandomInputs);
+	TEST_Player LocalPlayer2(Setup.UseRandomInputs);
+	TEST_Player RemotePlayer1(Setup.UseRandomInputs);
+	TEST_Player TrueRemotePlayer2(Setup.UseRandomInputs);
 
-	const uint16_t TrueStartMockIterationIndex = RemoteStartFrameIndex * FrameDurationDivider;
-	const uint16_t RemoteStartMockIterationIndex = (RemoteStartFrameIndex + FrameAdvantageInFrames) * FrameDurationDivider;
+	TEST_NSPC_Systems::MockIterationIndex = FrameToIteration(Setup.LocalStartFrameIndex);
 
-	TEST_NSPC_Systems::SyncWithRemoteFrameIndex(TrueLocalPlayer1Identity.SystemIndex, LocalStartFrameIndex);
+	const uint16_t TrueStartMockIterationIndex = FrameToIteration(RemoteStartFrameIndex);
+	const uint16_t RemoteStartMockIterationIndex = FrameToIteration(RemoteStartFrameIndex + Environment.FrameAdvantageInFrames);
+
+	TEST_NSPC_Systems::SyncWithRemoteFrameIndex(TrueLocalPlayer1Identity.SystemIndex, Setup.LocalStartFrameIndex);
 
 	TrueLocalPlayer1.ActivateNow(TrueLocalPlayer1Identity);
 
 	srand(0);
 
-	for (; TEST_NSPC_Systems::MockIterationIndex < LocalStartFrameIndex * FrameDurationDivider + (uint16_t)MockIterationsCount; TEST_NSPC_Systems::MockIterationIndex++)
+	for (; TEST_NSPC_Systems::MockIterationIndex < FrameToIteration(Setup.LocalStartFrameIndex) + (uint16_t)MockIterationsCount; TEST_NSPC_Systems::MockIterationIndex++)
 	{
 		if (TEST_NSPC_Systems::MockIterationIndex == TrueStartMockIterationIndex)
 		{
@@ -382,13 +388,13 @@ bool Test1Local2RemoteMockRollback(const bool ForceMaximumRollback, const bool U
 
 			TEST_NSPC_Systems::TransferLocalPlayersInputs();
 		}
-		
-		if (TEST_NSPC_Systems::MockIterationIndex % (ReceiveRemoteIntervalInFrames * FrameDurationDivider) == 0 && TEST_NSPC_Systems::MockIterationIndex > RemoteStartMockIterationIndex)
+
+		if (TEST_NSPC_Systems::MockIterationIndex % std::max(FrameToIteration(Environment.ReceiveRemoteIntervalInFrames), uint16_t(1)) == 0 && TEST_NSPC_Systems::MockIterationIndex > RemoteStartMockIterationIndex)
 		{
 			TEST_NSPC_Systems::TransferLocalPlayersInputs();
 		}
 
-		TEST_NSPC_Systems::TryTickingToNextFrame(DATA_CFG::Get().SimulationConfiguration.FrameDurationInSeconds / FrameDurationDivider);
+		TEST_NSPC_Systems::TryTickingToNextFrame(Environment.MockHardwareFrameDurationInSeconds, AllowStarvation);
 	}
 
 	TEST_NSPC_Systems::ForceResetAndCleanup();

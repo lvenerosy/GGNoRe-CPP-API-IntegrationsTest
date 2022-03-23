@@ -4,16 +4,89 @@
 
 #pragma once
 
-#include <assert.h>
+#include <GGNoRe-CPP-API.hpp>
 
-bool Test1Local2RemoteMockRollback(const bool ForceMaximumRollback, const bool UseRandomInputs);
+#include <array>
+#include <assert.h>
+#include <functional>
+#include <iostream>
+
+struct TestEnvironment
+{
+	size_t TestDurationInFrames = 60;
+	uint16_t ReceiveRemoteIntervalInFrames = 3;
+	uint16_t FrameAdvantageInFrames = 3;
+	float MockHardwareFrameDurationInSeconds = 0.016667f;
+};
+
+struct PlayersSetup
+{
+	bool UseRandomInputs = false;
+	uint16_t LocalStartFrameIndex = 0;
+	uint16_t RemoteStartOffsetInFrames = 2;
+};
+
+struct RangeFunctorChain
+{
+	size_t GlobalTestCount = 1;
+	std::function<void()> RangeFunctor;
+};
+
+template<typename T, std::size_t N> RangeFunctorChain GetRangeFunctor(const std::array<T, N> ValueRange, T& Value, const RangeFunctorChain ChainedRangeFunctor)
+{
+	return
+	{
+		ChainedRangeFunctor.GlobalTestCount * N,
+		[ValueRange, &Value, ChainedRangeFunctor]()
+		{
+			for (const auto& NewValue : ValueRange)
+			{
+				Value = NewValue;
+				ChainedRangeFunctor.RangeFunctor();
+			}
+		}
+	};
+}
+
+bool Test1Local2RemoteMockRollback(const GGNoRe::API::DATA_CFG Config, const TestEnvironment Environment, const PlayersSetup Setup);
 
 int main()
 {
-	assert(Test1Local2RemoteMockRollback(false, false));
-	assert(Test1Local2RemoteMockRollback(true, false));
-	assert(Test1Local2RemoteMockRollback(false, true));
-	assert(Test1Local2RemoteMockRollback(true, true));
+	GGNoRe::API::DATA_CFG Config;
+	TestEnvironment Environment;
+	PlayersSetup Setup;
+
+	// A one off test to do a quick check
+	// assert(Test1Local2RemoteMockRollback(Config, Environment, Setup));
+
+	size_t CurrentTestCounter = 0;
+	RangeFunctorChain Tests;
+	const RangeFunctorChain TestRunner
+	{
+		1,
+		[&Config, &Environment, &Setup, &Tests, &CurrentTestCounter]()
+		{
+			assert(Test1Local2RemoteMockRollback(Config, Environment, Setup));
+			std::cout << std::to_string(++CurrentTestCounter) << "/" << Tests.GlobalTestCount << std::endl;
+		}
+	};
+
+	Tests = GetRangeFunctor(std::array<size_t, 4>{ 0, 1, 2, 3 }, Config.RollbackConfiguration.DelayFramesCount, TestRunner);
+	Tests = GetRangeFunctor(std::array<size_t, 4>{ 0, 1, 2, 3 }, Config.RollbackConfiguration.InputLeniencyFramesCount, Tests);
+	Tests = GetRangeFunctor(std::array<size_t, 3>{ 1, 4, 7 }, Config.RollbackConfiguration.RollbackBufferMinSize, Tests);
+	Tests = GetRangeFunctor(std::array<bool, 2>{ false, true }, Config.RollbackConfiguration.ForceMaximumRollback, Tests);
+
+	Tests = GetRangeFunctor(std::array<float, 5>{ 0.008333f, 0.011111f, 0.016667f, 0.025f, 0.033333f }, Config.SimulationConfiguration.FrameDurationInSeconds, Tests);
+	Tests = GetRangeFunctor(std::array<float, 3>{ 30.f * 0.016667f, 60.f * 0.016667f, 100.f * 0.016667f }, Config.SimulationConfiguration.StallTimerDurationInSeconds, Tests);
+
+	Tests = GetRangeFunctor(std::array<uint16_t, 3>{ 1, 2, 5 }, Environment.ReceiveRemoteIntervalInFrames, Tests);
+	Tests = GetRangeFunctor(std::array<uint16_t, 2>{ 0, 5 }, Environment.FrameAdvantageInFrames, Tests);
+
+	Tests = GetRangeFunctor(std::array<bool, 2>{ false, true }, Setup.UseRandomInputs, Tests);
+	Tests = GetRangeFunctor(std::array<uint16_t, 2>{ 0, 10 }, Setup.LocalStartFrameIndex, Tests);
+	Tests = GetRangeFunctor(std::array<uint16_t, 2>{ 0, 5 }, Setup.RemoteStartOffsetInFrames, Tests);
+
+	Tests.RangeFunctor();
 
 	return 0;
 }
