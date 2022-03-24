@@ -51,10 +51,15 @@ public:
 protected:
 	void OnRegisterActivationChange(const RegisterActivationChangeEvent RegisteredActivationChange, const ActivationChangeEvent ActivationChange) override
 	{
-		assert(RegisteredActivationChange.Success == ABS_RB_Rollbackable::RegisterActivationChangeEvent::RegisterSuccess_E::Registered);
-
-		// Both OnRegisterActivationChange and ShouldSendInputsToTarget happen outside of the simulation so they can be properly ordered so that the owner is valid
-		OwnerInternal = ActivationChange.Owner;
+		if (RegisteredActivationChange.Success == I_RB_Rollbackable::RegisterSuccess_E::Registered)
+		{
+			// Both OnRegisterActivationChange and ShouldSendInputsToTarget happen outside of the simulation so they can be properly ordered so that the owner is valid
+			OwnerInternal = ActivationChange.Owner;
+		}
+		else
+		{
+			throw RegisteredActivationChange.Success;
+		}
 	}
 
 	void OnActivationChange(const ActivationChangeEvent ActivationChange) override
@@ -96,7 +101,7 @@ protected:
 		Inputs = BinaryPayload;
 	}
 
-	void ResetAndCleanup() override
+	void ResetAndCleanup() noexcept override
 	{
 		Inputs.clear();
 		LocalMockInputs.clear();
@@ -113,7 +118,10 @@ public:
 protected:
 	void OnRegisterActivationChange(const RegisterActivationChangeEvent RegisteredActivationChange, const ActivationChangeEvent ActivationChange) override
 	{
-		assert(RegisteredActivationChange.Success == ABS_RB_Rollbackable::RegisterActivationChangeEvent::RegisterSuccess_E::Registered);
+		if (RegisteredActivationChange.Success != I_RB_Rollbackable::RegisterSuccess_E::Registered)
+		{
+			throw RegisteredActivationChange.Success;
+		}
 	}
 
 	void OnActivationChange(const ActivationChangeEvent ActivationChange) override
@@ -156,7 +164,7 @@ protected:
 		}
 	}
 
-	void ResetAndCleanup() override
+	void ResetAndCleanup() noexcept override
 	{
 		Counter = 0;
 	}
@@ -170,7 +178,10 @@ public:
 protected:
 	void OnRegisterActivationChange(const RegisterActivationChangeEvent RegisteredActivationChange, const ActivationChangeEvent ActivationChange) override
 	{
-		assert(RegisteredActivationChange.Success == ABS_RB_Rollbackable::RegisterActivationChangeEvent::RegisterSuccess_E::Registered);
+		if (RegisteredActivationChange.Success != I_RB_Rollbackable::RegisterSuccess_E::Registered)
+		{
+			throw RegisteredActivationChange.Success;
+		}
 	}
 
 	void OnActivationChange(const ActivationChangeEvent ActivationChange) override {}
@@ -191,7 +202,7 @@ protected:
 	void OnStayCurrentFrame(const uint16_t FrameIndex) override {}
 	void OnPreToNextFrame(const uint16_t FrameIndex) override {}
 
-	void ResetAndCleanup() override {}
+	void ResetAndCleanup() noexcept override {}
 };
 
 // This is a player class grouping the 3 components for simplicity's sake
@@ -241,7 +252,7 @@ public:
 		SimulatorInternal.ChangeActivationNow(Owner, I_RB_Rollbackable::ActivationChangeEvent::ChangeType_E::Activate);
 	}
 
-	void ActivateInPast(const I_RB_Rollbackable::ActivationChangeEvent Activation)
+	void ActivateInPast(const DATA_Player Owner, const uint16_t StartFrameIndex)
 	{
 		assert(PlayersInternal.find(this) == PlayersInternal.cend());
 
@@ -249,9 +260,9 @@ public:
 
 		PlayersInternal.insert(this);
 
-		EmulatorInternal.ChangeActivationInPast(Activation);
-		SaveStatesInternal.ChangeActivationInPast(Activation);
-		SimulatorInternal.ChangeActivationInPast(Activation);
+		EmulatorInternal.ChangeActivationInPast({ I_RB_Rollbackable::ActivationChangeEvent::ChangeType_E::Activate, Owner, StartFrameIndex });
+		SaveStatesInternal.ChangeActivationInPast({ I_RB_Rollbackable::ActivationChangeEvent::ChangeType_E::Activate, Owner, StartFrameIndex });
+		SimulatorInternal.ChangeActivationInPast({ I_RB_Rollbackable::ActivationChangeEvent::ChangeType_E::Activate, Owner, StartFrameIndex });
 	}
 };
 
@@ -340,7 +351,7 @@ bool Test1Local2RemoteMockRollback(const DATA_CFG Config, const TestEnvironment 
 	DATA_CFG::Load(Config);
 
 	const uint16_t RemoteStartFrameIndex = Setup.LocalStartFrameIndex + Setup.RemoteStartOffsetInFrames;
-	const bool AllowStarvation = Environment.ReceiveRemoteIntervalInFrames > Config.RollbackBufferMaxSize() || Environment.FrameAdvantageInFrames > Config.RollbackBufferMaxSize();
+	const bool AllowStarvation = Environment.ReceiveRemoteIntervalInFrames > Config.RollbackBufferMaxSize() + 1;
 
 	const DATA_Player TrueLocalPlayer1Identity{ 0, true, Setup.LocalStartFrameIndex, 0 };
 	const DATA_Player LocalPlayer2Identity{ TrueLocalPlayer1Identity.Id + 1, false, RemoteStartFrameIndex, TrueLocalPlayer1Identity.SystemIndex };
@@ -364,7 +375,7 @@ bool Test1Local2RemoteMockRollback(const DATA_CFG Config, const TestEnvironment 
 	TEST_NSPC_Systems::MockIterationIndex = FrameToIteration(Setup.LocalStartFrameIndex);
 
 	const uint16_t TrueStartMockIterationIndex = FrameToIteration(RemoteStartFrameIndex);
-	const uint16_t RemoteStartMockIterationIndex = FrameToIteration(RemoteStartFrameIndex + Environment.FrameAdvantageInFrames);
+	const uint16_t RemoteStartMockIterationIndex = FrameToIteration(RemoteStartFrameIndex + Environment.LocalFrameAdvantageInFrames);
 
 	TEST_NSPC_Systems::SyncWithRemoteFrameIndex(TrueLocalPlayer1Identity.SystemIndex, Setup.LocalStartFrameIndex);
 
@@ -383,8 +394,16 @@ bool Test1Local2RemoteMockRollback(const DATA_CFG Config, const TestEnvironment 
 
 		if (TEST_NSPC_Systems::MockIterationIndex == RemoteStartMockIterationIndex)
 		{
-			RemotePlayer1.ActivateInPast({ I_RB_Rollbackable::ActivationChangeEvent::ChangeType_E::Activate, RemotePlayer1Identity,  RemoteStartFrameIndex });
-			LocalPlayer2.ActivateInPast({ I_RB_Rollbackable::ActivationChangeEvent::ChangeType_E::Activate, LocalPlayer2Identity,  RemoteStartFrameIndex });
+			try
+			{
+				RemotePlayer1.ActivateInPast(RemotePlayer1Identity, RemoteStartFrameIndex);
+				LocalPlayer2.ActivateInPast(LocalPlayer2Identity, RemoteStartFrameIndex);
+			}
+			catch (const I_RB_Rollbackable::RegisterSuccess_E& Success)
+			{
+				// Basically illegal activation, in a real use you first would make sure you can activate before actually activating
+				return Success == I_RB_Rollbackable::RegisterSuccess_E::UnreachablePastFrame && Environment.LocalFrameAdvantageInFrames > Config.RollbackBufferMaxSize();
+			}
 
 			TEST_NSPC_Systems::TransferLocalPlayersInputs();
 		}
