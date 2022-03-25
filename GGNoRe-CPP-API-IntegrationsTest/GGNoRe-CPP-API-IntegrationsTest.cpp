@@ -310,6 +310,9 @@ static void TryTickingToNextFrame(float DeltaDurationInSeconds, const bool Allow
 
 		switch (Success)
 		{
+		case ABS_RB_Rollbackable::SINGLETON::TickSuccess_E::DoubleSimulation:
+			TestLog("^^^^^^^^^^^^ SYSTEM " + std::to_string(SystemIndex) + " DOUBLE - ITERATION " + std::to_string(MockIterationIndex) + " ^^^^^^^^^^^^");
+			break;
 		case ABS_RB_Rollbackable::SINGLETON::TickSuccess_E::StallAdvantage:
 			TestLog("^^^^^^^^^^^^ SYSTEM " + std::to_string(SystemIndex) + " STALLING - ITERATION " + std::to_string(MockIterationIndex) + " ^^^^^^^^^^^^");
 			break;

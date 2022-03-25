@@ -78,7 +78,8 @@ int main()
 
 	// 240hz, 144hz, 60hz, 45hz, 30hz, hard coded to avoid precision issues
 	Tests = GetRangeFunctor(std::array<float, 5>{ 0.004166f, 0.006944f, 0.016667f, 0.022222f, 0.033333f }, Config.SimulationConfiguration.FrameDurationInSeconds, Tests);
-	Tests = GetRangeFunctor(std::array<float, 4>{ 0.f, 30.f * 0.016667f, 60.f * 0.016667f, 100.f * 0.016667f }, Config.SimulationConfiguration.StallTimerDurationInSeconds, Tests);
+	Tests = GetRangeFunctor(std::array<float, 2>{ 0.f, 60.f * 0.016667f }, Config.SimulationConfiguration.StallTimerDurationInSeconds, Tests);
+	Tests = GetRangeFunctor(std::array<float, 2>{ 0.f, 60.f * 0.016667f }, Config.SimulationConfiguration.DoubleSimulationTimerDurationInSeconds, Tests);
 
 	Tests = GetRangeFunctor(std::array<uint16_t, 3>{ 1, 2, 5 }, Environment.ReceiveRemoteIntervalInFrames, Tests);
 	Tests = GetRangeFunctor(std::array<uint16_t, 3>{ 0, 2, 5 }, Environment.LocalFrameAdvantageInFrames, Tests);
