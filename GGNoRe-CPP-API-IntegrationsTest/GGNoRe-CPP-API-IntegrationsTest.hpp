@@ -66,7 +66,7 @@ int main()
 	struct TestProgress
 	{
 		size_t CurrentTestCounter = 0;
-		const size_t StartTestIndex = 2113;
+		const size_t StartTestIndex = 0;
 	};
 	TestProgress Progress;
 	RangeFunctorChain Tests;
