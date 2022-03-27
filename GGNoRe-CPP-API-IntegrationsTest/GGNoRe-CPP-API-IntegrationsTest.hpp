@@ -15,8 +15,6 @@ struct TestEnvironment
 {
 	size_t TestDurationInFrames = 60;
 	uint16_t ReceiveRemoteIntervalInFrames = 3;
-	uint16_t LocalFrameAdvantageInFrames = 3;
-	float MockHardwareFrameDurationInSeconds = 0.016667f;
 };
 
 struct PlayersSetup
@@ -24,6 +22,9 @@ struct PlayersSetup
 	bool UseRandomInputs = false;
 	uint16_t LocalStartFrameIndex = 0;
 	uint16_t RemoteStartOffsetInFrames = 2;
+	uint16_t LocalFrameAdvantageInFrames = 3;
+	float LocalMockHardwareFrameDurationInSeconds = 0.016667f;
+	float RemoteMockHardwareFrameDurationInSeconds = 0.016667f;
 };
 
 struct RangeFunctorChain
@@ -59,8 +60,8 @@ int main()
 	// A one off test to do a quick sanity check
 	//Config.RollbackConfiguration = { 0, 0, 1, false };
 	//Config.SimulationConfiguration = { 0.016667f, 0.f, 0.f };
-	//Environment = { 60, 1, 0, 0.008333f };
-	//Setup = { false, 0, 0 };
+	//Environment = { 60, 1 };
+	//Setup = { false, 0, 0, 0, 0.008333f, 0.008333f };
 	//assert(Test1Local2RemoteMockRollback(Config, Environment, Setup));
 
 	struct TestProgress
@@ -89,19 +90,21 @@ int main()
 	Tests = GetRangeFunctor(std::array<size_t, 3>{ 1, 4, 7 }, Config.RollbackConfiguration.RollbackBufferMinSize, Tests);
 	Tests = GetRangeFunctor(std::array<bool, 2>{ false, true }, Config.RollbackConfiguration.ForceMaximumRollback, Tests);
 
-	// 240hz, 144hz, 60hz, 45hz, 30hz, hard coded to avoid precision issues
-	Tests = GetRangeFunctor(std::array<float, 5>{ 0.004166f, 0.006944f, 0.016667f, 0.022222f, 0.033333f }, Config.SimulationConfiguration.FrameDurationInSeconds, Tests);
+	// 144hz, 60hz, 45hz, 30hz, hard coded to avoid precision issues
+	Tests = GetRangeFunctor(std::array<float, 4>{ 0.006944f, 0.016667f, 0.022222f, 0.033333f }, Config.SimulationConfiguration.FrameDurationInSeconds, Tests);
 	Tests = GetRangeFunctor(std::array<float, 2>{ 0.f, 60.f * 0.016667f }, Config.SimulationConfiguration.StallTimerDurationInSeconds, Tests);
 	Tests = GetRangeFunctor(std::array<float, 2>{ 0.f, 60.f * 0.016667f }, Config.SimulationConfiguration.DoubleSimulationTimerDurationInSeconds, Tests);
 
 	Tests = GetRangeFunctor(std::array<uint16_t, 3>{ 1, 2, 5 }, Environment.ReceiveRemoteIntervalInFrames, Tests);
-	Tests = GetRangeFunctor(std::array<uint16_t, 3>{ 0, 2, 5 }, Environment.LocalFrameAdvantageInFrames, Tests);
-	// 120fps, 90fps, 60fps, 40fps, 30fps, 16fps, hard coded to avoid precision issues
-	Tests = GetRangeFunctor(std::array<float, 6>{ 0.008333f, 0.011111f, 0.016667f, 0.025f, 0.033333f, 0.0625f }, Environment.MockHardwareFrameDurationInSeconds, Tests);
 
 	Tests = GetRangeFunctor(std::array<bool, 2>{ false, true }, Setup.UseRandomInputs, Tests);
 	Tests = GetRangeFunctor(std::array<uint16_t, 3>{ 0, 1, 10 }, Setup.LocalStartFrameIndex, Tests);
 	Tests = GetRangeFunctor(std::array<uint16_t, 3>{ 0, 2, 5 }, Setup.RemoteStartOffsetInFrames, Tests);
+	Tests = GetRangeFunctor(std::array<uint16_t, 3>{ 0, 2, 5 }, Setup.LocalFrameAdvantageInFrames, Tests);
+	// 120fps, 60fps, 40fps, 16fps, hard coded to avoid precision issues
+	Tests = GetRangeFunctor(std::array<float, 4>{ 0.008333f, 0.016667f, 0.025f, 0.0625f }, Setup.LocalMockHardwareFrameDurationInSeconds, Tests);
+	// 90fps, 60fps, 30fps, hard coded to avoid precision issues
+	Tests = GetRangeFunctor(std::array<float, 3>{ 0.011111f, 0.016667f, 0.033333f }, Setup.RemoteMockHardwareFrameDurationInSeconds, Tests);
 
 	Tests.RangeFunctor();
 
