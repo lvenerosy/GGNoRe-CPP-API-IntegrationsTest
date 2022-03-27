@@ -11,7 +11,7 @@
 
 using namespace GGNoRe::API;
 
-static void TestLog(const std::string& Message)
+static inline void TestLog(const std::string& Message)
 {
 #if GGNORECPPAPI_LOG
 	std::cout << Message << std::endl << std::endl;
@@ -33,15 +33,15 @@ public:
 	{
 	}
 
-	DATA_Player Owner() const { return OwnerInternal; }
+	inline DATA_Player Owner() const { return OwnerInternal; }
 
-	const std::vector<uint8_t>& LatestInputs() const
+	inline const std::vector<uint8_t>& LatestInputs() const
 	{
 		assert(!Inputs.empty());
 		return Inputs;
 	}
 
-	bool ShouldSendInputsToTarget(const uint8_t TargetSystemIndex) const
+	inline bool ShouldSendInputsToTarget(const uint8_t TargetSystemIndex) const
 	{
 		return OwnerInternal.SystemIndex != TargetSystemIndex && OwnerInternal.IsLocal && !Inputs.empty();
 	}
@@ -229,12 +229,12 @@ public:
 		PlayersInternal.erase(this);
 	}
 
-	static const std::set<TEST_Player*>& Players()
+	static inline const std::set<TEST_Player*>& Players()
 	{
 		return PlayersInternal;
 	}
 
-	const TEST_CPT_IPT_Emulator& Emulator() const
+	inline const TEST_CPT_IPT_Emulator& Emulator() const
 	{
 		return EmulatorInternal;
 	}
@@ -368,6 +368,8 @@ bool Test1Local2RemoteMockRollback(const DATA_CFG Config, const TestEnvironment 
 		return uint16_t(float(FrameIndex) * Config.SimulationConfiguration.FrameDurationInSeconds / Environment.MockHardwareFrameDurationInSeconds);
 	};
 
+	const auto ReceiveRemoteIntervalInIterations = FrameToIteration(Environment.ReceiveRemoteIntervalInFrames);
+
 	const size_t MockIterationsCount = FrameToIteration(uint16_t(Environment.TestDurationInFrames));
 
 	TEST_Player TrueLocalPlayer1(Setup.UseRandomInputs);
@@ -397,26 +399,38 @@ bool Test1Local2RemoteMockRollback(const DATA_CFG Config, const TestEnvironment 
 
 		if (TEST_NSPC_Systems::MockIterationIndex == RemoteStartMockIterationIndex)
 		{
-			try
+			if (Environment.LocalFrameAdvantageInFrames == 0)
 			{
-				RemotePlayer1.ActivateInPast(RemotePlayer1Identity, RemoteStartFrameIndex);
-				LocalPlayer2.ActivateInPast(LocalPlayer2Identity, RemoteStartFrameIndex);
+				assert(RemoteStartMockIterationIndex == TrueStartMockIterationIndex);
+
+				RemotePlayer1.ActivateNow(RemotePlayer1Identity);
+				LocalPlayer2.ActivateNow(LocalPlayer2Identity);
 			}
-			catch (const I_RB_Rollbackable::RegisterSuccess_E& Success)
+			else
 			{
-				// Basically illegal activation, in a real use you first would make sure you can activate before actually activating
-				return Success == I_RB_Rollbackable::RegisterSuccess_E::UnreachablePastFrame && Environment.LocalFrameAdvantageInFrames > Config.RollbackBufferMaxSize();
+				try
+				{
+					RemotePlayer1.ActivateInPast(RemotePlayer1Identity, RemoteStartFrameIndex);
+					LocalPlayer2.ActivateInPast(LocalPlayer2Identity, RemoteStartFrameIndex);
+				}
+				catch (const I_RB_Rollbackable::RegisterSuccess_E& Success)
+				{
+					// Basically illegal activation, in a real use you first would make sure you can activate before actually activating
+					return Success == I_RB_Rollbackable::RegisterSuccess_E::UnreachablePastFrame && Environment.LocalFrameAdvantageInFrames > Config.RollbackBufferMaxSize();
+				}
 			}
 
-			TEST_NSPC_Systems::TransferLocalPlayersInputs();
-		}
-
-		if (TEST_NSPC_Systems::MockIterationIndex % std::max(FrameToIteration(Environment.ReceiveRemoteIntervalInFrames), uint16_t(1)) == 0 && TEST_NSPC_Systems::MockIterationIndex > RemoteStartMockIterationIndex)
-		{
 			TEST_NSPC_Systems::TransferLocalPlayersInputs();
 		}
 
 		TEST_NSPC_Systems::TryTickingToNextFrame(Environment.MockHardwareFrameDurationInSeconds, AllowStarvation);
+
+		const auto IterationReceiveIntervalRemainder = TEST_NSPC_Systems::MockIterationIndex % std::max(ReceiveRemoteIntervalInIterations, uint16_t(1));
+		// The interval check is a bit hacky but it is to compensate for the precision loss going from a decimal number to an integer
+		if ((IterationReceiveIntervalRemainder == 0 || IterationReceiveIntervalRemainder == 1) && TEST_NSPC_Systems::MockIterationIndex >= RemoteStartMockIterationIndex)
+		{
+			TEST_NSPC_Systems::TransferLocalPlayersInputs();
+		}
 	}
 
 	TEST_NSPC_Systems::ForceResetAndCleanup();

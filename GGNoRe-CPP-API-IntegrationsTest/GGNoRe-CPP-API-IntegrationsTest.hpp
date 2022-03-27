@@ -57,17 +57,30 @@ int main()
 	PlayersSetup Setup;
 
 	// A one off test to do a quick sanity check
-	// assert(Test1Local2RemoteMockRollback(Config, Environment, Setup));
+	//Config.RollbackConfiguration = { 0, 0, 1, false };
+	//Config.SimulationConfiguration = { 0.016667f, 0.f, 0.f };
+	//Environment = { 60, 1, 0, 0.008333f };
+	//Setup = { false, 0, 0 };
+	//assert(Test1Local2RemoteMockRollback(Config, Environment, Setup));
 
-	size_t CurrentTestCounter = 0;
+	struct TestProgress
+	{
+		size_t CurrentTestCounter = 0;
+		const size_t StartTestIndex = 2113;
+	};
+	TestProgress Progress;
 	RangeFunctorChain Tests;
 	const RangeFunctorChain TestRunner
 	{
 		1,
-		[&Config, &Environment, &Setup, &Tests, &CurrentTestCounter]()
+		[&Config, &Environment, &Setup, &Tests, &Progress]()
 		{
-			assert(Test1Local2RemoteMockRollback(Config, Environment, Setup));
-			std::cout << std::to_string(++CurrentTestCounter) << "/" << Tests.GlobalTestCount << std::endl;
+			++Progress.CurrentTestCounter;
+			if (Progress.CurrentTestCounter >= Progress.StartTestIndex)
+			{
+				assert(Test1Local2RemoteMockRollback(Config, Environment, Setup));
+				std::cout << std::to_string(Progress.CurrentTestCounter) << "/" << Tests.GlobalTestCount << std::endl;
+			}
 		}
 	};
 
