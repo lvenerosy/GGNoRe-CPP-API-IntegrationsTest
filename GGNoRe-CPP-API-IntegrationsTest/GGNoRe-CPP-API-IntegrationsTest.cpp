@@ -72,15 +72,6 @@ protected:
 
 	void OnRollActivationChangeBack(const ActivationChangeEvent ActivationChange) override {}
 
-	void OnPreRollback(const uint16_t RollbackFrameIndex) override {}
-	void OnRollback(const uint16_t RollbackFrameIndex) override {}
-
-	void OnSaveFrame(const uint16_t SavedFrameIndex) override {}
-	void OnPostSaveFrame(const uint16_t SavedFrameIndex) override {}
-
-	void OnPreSimulate(const uint16_t SimulatedFrameIndex) override {}
-	void OnSimulate(const uint16_t SimulatedFrameIndex, const std::set<uint8_t>& Inputs) override {}
-
 	void OnStarvedForInputFrame(const uint16_t FrameIndex) override {}
 	void OnStallAdvantageFrame(const uint16_t FrameIndex) override {}
 	void OnStayCurrentFrame(const uint16_t FrameIndex) override {}
@@ -108,11 +99,20 @@ protected:
 	}
 };
 
-class TEST_CPT_RB_SaveStates final : public ABS_CPT_RB_SaveStates
+struct TEST_CPT_State
 {
 	uint8_t Counter = 0;
+};
+
+class TEST_CPT_RB_SaveStates final : public ABS_CPT_RB_SaveStates
+{
+	TEST_CPT_State& PlayerState;
 
 public:
+	TEST_CPT_RB_SaveStates(TEST_CPT_State& PlayerState)
+		:PlayerState(PlayerState)
+	{}
+
 	~TEST_CPT_RB_SaveStates() { ResetAndCleanup(); }
 
 protected:
@@ -128,20 +128,11 @@ protected:
 	{
 		if (ActivationChange.Type == ActivationChangeEvent::ChangeType_E::Activate)
 		{
-			Counter = (uint8_t)ActivationChange.FrameIndex;
+			PlayerState.Counter = (uint8_t)ActivationChange.FrameIndex;
 		}
 	}
 
 	void OnRollActivationChangeBack(const ActivationChangeEvent ActivationChange) override {}
-
-	void OnPreRollback(const uint16_t RollbackFrameIndex) override {}
-	void OnRollback(const uint16_t RollbackFrameIndex) override {}
-
-	void OnSaveFrame(const uint16_t SavedFrameIndex) override {}
-	void OnPostSaveFrame(const uint16_t SavedFrameIndex) override {}
-
-	void OnPreSimulate(const uint16_t SimulatedFrameIndex) override {}
-	void OnSimulate(const uint16_t SimulatedFrameIndex, const std::set<uint8_t>& Inputs) override { Counter++; }
 
 	void OnStarvedForInputFrame(const uint16_t FrameIndex) override {}
 	void OnStallAdvantageFrame(const uint16_t FrameIndex) override {}
@@ -153,26 +144,29 @@ protected:
 	void OnSerialize(std::vector<uint8_t>& TargetBufferOut) override
 	{
 		TargetBufferOut.clear();
-		TargetBufferOut.push_back(Counter);
+		TargetBufferOut.push_back(PlayerState.Counter);
 	}
 
 	void OnDeserialize(const std::vector<uint8_t>& SourceBuffer) override
 	{
 		if (SourceBuffer.size() == 1)
 		{
-			Counter = SourceBuffer[0];
+			PlayerState.Counter = SourceBuffer[0];
 		}
 	}
 
-	void ResetAndCleanup() noexcept override
-	{
-		Counter = 0;
-	}
+	void ResetAndCleanup() noexcept override {}
 };
 
 class TEST_CPT_RB_Simulator final : public ABS_CPT_RB_Simulator
 {
+	TEST_CPT_State& PlayerState;
+
 public:
+	TEST_CPT_RB_Simulator(TEST_CPT_State& PlayerState)
+		:PlayerState(PlayerState)
+	{}
+
 	~TEST_CPT_RB_Simulator() { ResetAndCleanup(); }
 
 protected:
@@ -188,14 +182,7 @@ protected:
 
 	void OnRollActivationChangeBack(const ActivationChangeEvent ActivationChange) override {}
 
-	void OnPreRollback(const uint16_t RollbackFrameIndex) override {}
-	void OnRollback(const uint16_t RollbackFrameIndex) override {}
-
-	void OnSaveFrame(const uint16_t SavedFrameIndex) override {}
-	void OnPostSaveFrame(const uint16_t SavedFrameIndex) override {}
-
-	void OnPreSimulate(const uint16_t SimulatedFrameIndex) override {}
-	void OnSimulate(const uint16_t SimulatedFrameIndex, const std::set<uint8_t>& Inputs) override { }
+	void OnSimulate(const uint16_t SimulatedFrameIndex, const std::set<uint8_t>& Inputs) override { PlayerState.Counter++; }
 
 	void OnStarvedForInputFrame(const uint16_t FrameIndex) override {}
 	void OnStallAdvantageFrame(const uint16_t FrameIndex) override {}
@@ -214,13 +201,15 @@ class TEST_Player final
 
 	uint32_t DebugId = 0;
 
+	TEST_CPT_State State;
+
 	TEST_CPT_IPT_Emulator EmulatorInternal;
 	TEST_CPT_RB_SaveStates SaveStatesInternal;
 	TEST_CPT_RB_Simulator SimulatorInternal;
 
 public:
 	explicit TEST_Player(const bool UseRandomInputs)
-		:EmulatorInternal(UseRandomInputs)
+		:EmulatorInternal(UseRandomInputs), SaveStatesInternal(State), SimulatorInternal(State)
 	{
 	}
 
