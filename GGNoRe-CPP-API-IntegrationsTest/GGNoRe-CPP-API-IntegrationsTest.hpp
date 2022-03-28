@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Loïc Venerosy
+ * Copyright 2021 Loic Venerosy
  */
 
 #pragma once
