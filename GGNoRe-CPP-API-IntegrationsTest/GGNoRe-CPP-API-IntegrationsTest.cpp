@@ -46,7 +46,7 @@ public:
 		return OwnerInternal.SystemIndex != TargetSystemIndex && OwnerInternal.IsLocal && !Inputs.empty();
 	}
 
-	~TEST_CPT_IPT_Emulator() { ResetAndCleanup(); }
+	~TEST_CPT_IPT_Emulator() = default;
 
 protected:
 	void OnRegisterActivationChange(const RegisterActivationChangeEvent RegisteredActivationChange, const ActivationChangeEvent ActivationChange) override
@@ -113,7 +113,7 @@ public:
 		:PlayerState(PlayerState)
 	{}
 
-	~TEST_CPT_RB_SaveStates() { ResetAndCleanup(); }
+	~TEST_CPT_RB_SaveStates() = default;
 
 protected:
 	void OnRegisterActivationChange(const RegisterActivationChangeEvent RegisteredActivationChange, const ActivationChangeEvent ActivationChange) override
@@ -167,7 +167,7 @@ public:
 		:PlayerState(PlayerState)
 	{}
 
-	~TEST_CPT_RB_Simulator() { ResetAndCleanup(); }
+	~TEST_CPT_RB_Simulator() = default;
 
 protected:
 	void OnRegisterActivationChange(const RegisterActivationChangeEvent RegisteredActivationChange, const ActivationChangeEvent ActivationChange) override
