@@ -182,7 +182,8 @@ protected:
 
 	void OnRollActivationChangeBack(const ActivationChangeEvent ActivationChange) override {}
 
-	void OnSimulate(const uint16_t SimulatedFrameIndex, const std::set<uint8_t>& Inputs) override { PlayerState.Counter++; }
+	void OnSimulateFrame(const uint16_t SimulatedFrameIndex, const std::set<uint8_t>& Inputs) override { PlayerState.Counter++; }
+	void OnSimulateTick(const float DeltaDurationInSeconds) override {}
 
 	void OnStarvedForInputFrame(const uint16_t FrameIndex) override {}
 	void OnStallAdvantageFrame(const uint16_t FrameIndex) override {}
