@@ -296,6 +296,15 @@ class SystemMock
 	size_t MockIterationIndex = 0;
 	float UpdateTimer = 0.f;
 
+public:
+	struct OutcomesSanityCheck
+	{
+		const bool AllowDoubleSimulation = false;
+		const bool AllowStallAdvantage = false;
+		const bool AllowStarvedForInput = false;
+		const bool AllowStayCurrent = false;
+	};
+
 protected:
 	const PlayersSetup Setup;
 	const uint16_t RemoteStartFrameIndex = 0;
@@ -305,7 +314,7 @@ protected:
 		RemoteStartFrameIndex(Setup.LocalStartFrameIndex + Setup.RemoteStartOffsetInFrames)
 	{}
 
-	bool Tick(float DeltaDurationInSeconds, const uint8_t SystemIndex, const bool AllowStarvation)
+	bool Tick(float DeltaDurationInSeconds, const uint8_t SystemIndex, const OutcomesSanityCheck AllowedOutcomes)
 	{
 		TestLog("____________ SYSTEM " + std::to_string(SystemIndex) + " START - ITERATION " + std::to_string(MockIterationIndex) + " ____________");
 
@@ -315,16 +324,19 @@ protected:
 		{
 		case ABS_RB_Rollbackable::SINGLETON::TickSuccess_E::DoubleSimulation:
 			TestLog("^^^^^^^^^^^^ SYSTEM " + std::to_string(SystemIndex) + " DOUBLE - ITERATION " + std::to_string(MockIterationIndex) + " ^^^^^^^^^^^^");
+			assert(AllowedOutcomes.AllowDoubleSimulation);
 			break;
 		case ABS_RB_Rollbackable::SINGLETON::TickSuccess_E::StallAdvantage:
 			TestLog("^^^^^^^^^^^^ SYSTEM " + std::to_string(SystemIndex) + " STALLING - ITERATION " + std::to_string(MockIterationIndex) + " ^^^^^^^^^^^^");
+			assert(AllowedOutcomes.AllowStallAdvantage);
 			break;
 		case ABS_RB_Rollbackable::SINGLETON::TickSuccess_E::StarvedForInput:
 			TestLog("^^^^^^^^^^^^ SYSTEM " + std::to_string(SystemIndex) + " STARVED - ITERATION " + std::to_string(MockIterationIndex) + " ^^^^^^^^^^^^");
-			assert(AllowStarvation);
+			assert(AllowedOutcomes.AllowStarvedForInput);
 			break;
 		case ABS_RB_Rollbackable::SINGLETON::TickSuccess_E::StayCurrent:
 			TestLog("^^^^^^^^^^^^ SYSTEM " + std::to_string(SystemIndex) + " STAY - ITERATION " + std::to_string(MockIterationIndex) + " ^^^^^^^^^^^^");
+			assert(AllowedOutcomes.AllowStayCurrent);
 			break;
 		case ABS_RB_Rollbackable::SINGLETON::TickSuccess_E::ToNext:
 			TestLog("^^^^^^^^^^^^ SYSTEM " + std::to_string(SystemIndex) + " NEXT - ITERATION " + std::to_string(MockIterationIndex) + " ^^^^^^^^^^^^");
@@ -350,7 +362,7 @@ protected:
 
 public:
 	virtual bool PreUpdate(const uint16_t FrameIndex) = 0;
-	virtual void Update(const bool AllowStarvation) = 0;
+	virtual void Update(const OutcomesSanityCheck AllowedOutcomes) = 0;
 };
 
 class LocalMock final : public SystemMock
@@ -403,9 +415,9 @@ public:
 		return true;
 	}
 
-	void Update(const bool AllowStarvation) override
+	void Update(const OutcomesSanityCheck AllowedOutcomes) override
 	{
-		while (!Tick(Setup.LocalMockHardwareFrameDurationInSeconds, TrueLocalPlayer1Identity.SystemIndex, AllowStarvation));
+		while (!Tick(Setup.LocalMockHardwareFrameDurationInSeconds, TrueLocalPlayer1Identity.SystemIndex, AllowedOutcomes));
 	}
 };
 
@@ -463,9 +475,9 @@ public:
 		return true;
 	}
 
-	void Update(const bool AllowStarvation) override
+	void Update(const OutcomesSanityCheck AllowedOutcomes) override
 	{
-		while (!Tick(Setup.RemoteMockHardwareFrameDurationInSeconds, TrueRemotePlayer2Identity.SystemIndex, AllowStarvation));
+		while (!Tick(Setup.RemoteMockHardwareFrameDurationInSeconds, TrueRemotePlayer2Identity.SystemIndex, AllowedOutcomes));
 	}
 };
 
@@ -497,8 +509,20 @@ bool Test1Local2RemoteMockRollback(const DATA_CFG Config, const TestEnvironment 
 			TEST_NSPC_Systems::TransferLocalPlayersInputs();
 		}
 
-		Local.Update(AllowStarvation);
-		Remote.Update(AllowStarvation);
+		Local.Update
+		({
+			Setup.LocalMockHardwareFrameDurationInSeconds >= 2.f * Config.SimulationConfiguration.FrameDurationInSeconds,
+			Environment.ReceiveRemoteIntervalInFrames > 1,
+			Environment.ReceiveRemoteIntervalInFrames > Config.RollbackBufferMaxSize() + 1,
+			Setup.LocalMockHardwareFrameDurationInSeconds < Config.SimulationConfiguration.FrameDurationInSeconds
+		});
+		Remote.Update
+		({
+			Setup.RemoteMockHardwareFrameDurationInSeconds >= 2.f * Config.SimulationConfiguration.FrameDurationInSeconds,
+			Environment.ReceiveRemoteIntervalInFrames > 1,
+			Environment.ReceiveRemoteIntervalInFrames > Config.RollbackBufferMaxSize() + 1,
+			Setup.RemoteMockHardwareFrameDurationInSeconds < Config.SimulationConfiguration.FrameDurationInSeconds
+		});
 
 		if (IterationIndex % Environment.ReceiveRemoteIntervalInFrames == 0 && IterationIndex >= RemoteStartMockIterationIndex)
 		{

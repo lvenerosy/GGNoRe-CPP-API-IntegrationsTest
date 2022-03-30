@@ -88,7 +88,7 @@ int main()
 	Tests = GetRangeFunctor(std::array<size_t, 4>{ 0, 1, 2, 3 }, Config.RollbackConfiguration.DelayFramesCount, TestRunner);
 	Tests = GetRangeFunctor(std::array<size_t, 4>{ 0, 1, 2, 3 }, Config.RollbackConfiguration.InputLeniencyFramesCount, Tests);
 	Tests = GetRangeFunctor(std::array<size_t, 3>{ 1, 4, 7 }, Config.RollbackConfiguration.RollbackBufferMinSize, Tests);
-	Tests = GetRangeFunctor(std::array<bool, 2>{ false, true }, Config.RollbackConfiguration.ForceMaximumRollback, Tests);
+	Tests = GetRangeFunctor(std::array<bool, 1>{ false }, Config.RollbackConfiguration.ForceMaximumRollback, Tests);
 
 	// 144hz, 60hz, 45hz, 30hz, hard coded to avoid precision issues
 	Tests = GetRangeFunctor(std::array<float, 4>{ 0.006944f, 0.016667f, 0.022222f, 0.033333f }, Config.SimulationConfiguration.FrameDurationInSeconds, Tests);
