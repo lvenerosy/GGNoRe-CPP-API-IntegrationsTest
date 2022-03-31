@@ -101,7 +101,9 @@ protected:
 
 struct TEST_CPT_State
 {
-	uint8_t Counter = 0;
+	uint16_t NonZero = 1; // Necessary otherwise the other fields initialized to 0 generate a checksum with a value of 0 which is considered as being a missing checksum
+	uint8_t InputsAccumulator = 0; // To check that the de/serialization are consistent with OnSimulateFrame
+	float DeltaDurationAccumulatorInSeconds = 0.f; // To check that the de/serialization are consistent with OnSimulateTick
 };
 
 class TEST_CPT_RB_SaveStates final : public ABS_CPT_RB_SaveStates
@@ -124,13 +126,7 @@ protected:
 		}
 	}
 
-	void OnActivationChange(const ActivationChangeEvent ActivationChange) override
-	{
-		if (ActivationChange.Type == ActivationChangeEvent::ChangeType_E::Activate)
-		{
-			PlayerState.Counter = (uint8_t)ActivationChange.FrameIndex;
-		}
-	}
+	void OnActivationChange(const ActivationChangeEvent ActivationChange) override {}
 
 	void OnRollActivationChangeBack(const ActivationChangeEvent ActivationChange) override {}
 
@@ -139,19 +135,30 @@ protected:
 	void OnStayCurrentFrame(const uint16_t FrameIndex) override {}
 	void OnPreToNextFrame(const uint16_t FrameIndex) override {}
 
-	// This mock should not trigger trigger rollback even if the inputs don't match
-	// The objective here is to always fill the buffer the same way so the checksum is consistent
 	void OnSerialize(std::vector<uint8_t>& TargetBufferOut) override
 	{
-		TargetBufferOut.clear();
-		TargetBufferOut.push_back(PlayerState.Counter);
+		TargetBufferOut.resize(sizeof(PlayerState.NonZero) + sizeof(PlayerState.InputsAccumulator) + sizeof(PlayerState.DeltaDurationAccumulatorInSeconds));
+
+		std::memcpy(TargetBufferOut.data(), &PlayerState.NonZero, sizeof(PlayerState.NonZero));
+		size_t CopyOffset = sizeof(PlayerState.NonZero);
+
+		std::memcpy(TargetBufferOut.data() + CopyOffset, &PlayerState.InputsAccumulator, sizeof(PlayerState.InputsAccumulator));
+		CopyOffset += sizeof(PlayerState.InputsAccumulator);
+
+		std::memcpy(TargetBufferOut.data() + CopyOffset, &PlayerState.DeltaDurationAccumulatorInSeconds, sizeof(PlayerState.DeltaDurationAccumulatorInSeconds));
 	}
 
 	void OnDeserialize(const std::vector<uint8_t>& SourceBuffer) override
 	{
-		if (SourceBuffer.size() == 1)
+		if (!SourceBuffer.empty())
 		{
-			PlayerState.Counter = SourceBuffer[0];
+			std::memcpy(&PlayerState.NonZero, SourceBuffer.data(), sizeof(PlayerState.NonZero));
+			size_t ReadOffset = sizeof(PlayerState.NonZero);
+
+			std::memcpy(&PlayerState.InputsAccumulator, SourceBuffer.data() + ReadOffset, sizeof(PlayerState.InputsAccumulator));
+			ReadOffset += sizeof(PlayerState.InputsAccumulator);
+
+			std::memcpy(&PlayerState.DeltaDurationAccumulatorInSeconds, SourceBuffer.data() + ReadOffset, sizeof(PlayerState.DeltaDurationAccumulatorInSeconds));
 		}
 	}
 
@@ -182,8 +189,8 @@ protected:
 
 	void OnRollActivationChangeBack(const ActivationChangeEvent ActivationChange) override {}
 
-	void OnSimulateFrame(const uint16_t SimulatedFrameIndex, const std::set<uint8_t>& Inputs) override { PlayerState.Counter++; }
-	void OnSimulateTick(const float DeltaDurationInSeconds) override {}
+	void OnSimulateFrame(const uint16_t SimulatedFrameIndex, const std::set<uint8_t>& Inputs) override { for (auto Input : Inputs) { PlayerState.InputsAccumulator += Input; } }
+	void OnSimulateTick(const float DeltaDurationInSeconds) override { PlayerState.DeltaDurationAccumulatorInSeconds += DeltaDurationInSeconds;  }
 
 	void OnStarvedForInputFrame(const uint16_t FrameIndex) override {}
 	void OnStallAdvantageFrame(const uint16_t FrameIndex) override {}
@@ -491,7 +498,9 @@ bool Test1Local2RemoteMockRollback(const DATA_CFG Config, const TestEnvironment 
 
 	DATA_CFG::Load(Config);
 
-	const bool AllowStarvation = Environment.ReceiveRemoteIntervalInFrames > Config.RollbackBufferMaxSize() + 1;
+	// * 2 because you need one transfer to get/send the inputs and then another one to get/send the updated checksum
+	const bool AllowStarvedForInput = (size_t)Environment.ReceiveRemoteIntervalInFrames * 2 > Config.RollbackBufferMaxSize();
+	
 	const auto RemoteStartMockIterationIndex = Setup.LocalStartFrameIndex + Setup.RemoteStartOffsetInFrames + Setup.LocalFrameAdvantageInFrames;
 
 	TEST_NSPC_Systems::LocalMock Local(Setup);
@@ -513,14 +522,14 @@ bool Test1Local2RemoteMockRollback(const DATA_CFG Config, const TestEnvironment 
 		({
 			Setup.LocalMockHardwareFrameDurationInSeconds >= 2.f * Config.SimulationConfiguration.FrameDurationInSeconds,
 			Environment.ReceiveRemoteIntervalInFrames > 1,
-			Environment.ReceiveRemoteIntervalInFrames > Config.RollbackBufferMaxSize() + 1,
+			AllowStarvedForInput,
 			Setup.LocalMockHardwareFrameDurationInSeconds < Config.SimulationConfiguration.FrameDurationInSeconds
 		});
 		Remote.Update
 		({
 			Setup.RemoteMockHardwareFrameDurationInSeconds >= 2.f * Config.SimulationConfiguration.FrameDurationInSeconds,
 			Environment.ReceiveRemoteIntervalInFrames > 1,
-			Environment.ReceiveRemoteIntervalInFrames > Config.RollbackBufferMaxSize() + 1,
+			AllowStarvedForInput,
 			Setup.RemoteMockHardwareFrameDurationInSeconds < Config.SimulationConfiguration.FrameDurationInSeconds
 		});
 
