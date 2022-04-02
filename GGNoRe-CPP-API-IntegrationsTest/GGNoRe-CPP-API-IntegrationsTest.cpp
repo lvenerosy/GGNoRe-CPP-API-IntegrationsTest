@@ -104,6 +104,18 @@ struct TEST_CPT_State
 	uint16_t NonZero = 1; // Necessary otherwise the other fields initialized to 0 generate a checksum with a value of 0 which is considered as being a missing checksum
 	uint8_t InputsAccumulator = 0; // To check that the de/serialization are consistent with OnSimulateFrame
 	float DeltaDurationAccumulatorInSeconds = 0.f; // To check that the de/serialization are consistent with OnSimulateTick
+
+	void Reset()
+	{
+		NonZero = 1;
+		InputsAccumulator = 0;
+		DeltaDurationAccumulatorInSeconds = 0.f;
+	}
+
+	void LogHumanReadable(const std::string& Message) const
+	{
+		TestLog(Message + " " + std::to_string(NonZero) + " " + std::to_string(InputsAccumulator) + " " + std::to_string(DeltaDurationAccumulatorInSeconds));
+	}
 };
 
 class TEST_CPT_RB_SaveStates final : public ABS_CPT_RB_SaveStates
@@ -128,7 +140,14 @@ protected:
 
 	void OnActivationChange(const ActivationChangeEvent ActivationChange) override {}
 
-	void OnRollActivationChangeBack(const ActivationChangeEvent ActivationChange) override {}
+	void OnRollActivationChangeBack(const ActivationChangeEvent ActivationChange) override
+	{
+		if (ActivationChange.Type == ActivationChangeEvent::ChangeType_E::Activate)
+		{
+			PlayerState.Reset();
+			PlayerState.LogHumanReadable("{TEST ROLL ACTIVATION BACK}");
+		}
+	}
 
 	void OnStarvedForInputFrame(const uint16_t FrameIndex) override {}
 	void OnStallAdvantageFrame(const uint16_t FrameIndex) override {}
@@ -146,6 +165,8 @@ protected:
 		CopyOffset += sizeof(PlayerState.InputsAccumulator);
 
 		std::memcpy(TargetBufferOut.data() + CopyOffset, &PlayerState.DeltaDurationAccumulatorInSeconds, sizeof(PlayerState.DeltaDurationAccumulatorInSeconds));
+
+		PlayerState.LogHumanReadable("{TEST SERIALIZE}");
 	}
 
 	void OnDeserialize(const std::vector<uint8_t>& SourceBuffer) override
@@ -159,6 +180,12 @@ protected:
 			ReadOffset += sizeof(PlayerState.InputsAccumulator);
 
 			std::memcpy(&PlayerState.DeltaDurationAccumulatorInSeconds, SourceBuffer.data() + ReadOffset, sizeof(PlayerState.DeltaDurationAccumulatorInSeconds));
+
+			PlayerState.LogHumanReadable("{TEST DESERIALIZE SUCCESS}");
+		}
+		else
+		{
+			PlayerState.LogHumanReadable("{TEST DESERIALIZE FAILURE}");
 		}
 	}
 
@@ -189,8 +216,17 @@ protected:
 
 	void OnRollActivationChangeBack(const ActivationChangeEvent ActivationChange) override {}
 
-	void OnSimulateFrame(const uint16_t SimulatedFrameIndex, const std::set<uint8_t>& Inputs) override { for (auto Input : Inputs) { PlayerState.InputsAccumulator += Input; } }
-	void OnSimulateTick(const float DeltaDurationInSeconds) override { PlayerState.DeltaDurationAccumulatorInSeconds += DeltaDurationInSeconds;  }
+	void OnSimulateFrame(const uint16_t SimulatedFrameIndex, const std::set<uint8_t>& Inputs) override
+	{
+		for (auto Input : Inputs)
+		{
+			PlayerState.InputsAccumulator += Input;
+		}
+	}
+	void OnSimulateTick(const float DeltaDurationInSeconds) override
+	{
+		PlayerState.DeltaDurationAccumulatorInSeconds += DeltaDurationInSeconds;
+	}
 
 	void OnStarvedForInputFrame(const uint16_t FrameIndex) override {}
 	void OnStallAdvantageFrame(const uint16_t FrameIndex) override {}
@@ -399,9 +435,9 @@ public:
 
 	bool PreUpdate(const uint16_t FrameIndex) override
 	{
-		if (FrameIndex == RemoteStartFrameIndex + Setup.LocalFrameAdvantageInFrames)
+		if (FrameIndex == RemoteStartFrameIndex + Setup.InitialLatencyInFrames)
 		{
-			if (Setup.LocalFrameAdvantageInFrames == 0)
+			if (Setup.InitialLatencyInFrames == 0)
 			{
 				LocalPlayer2.ActivateNow(LocalPlayer2Identity);
 			}
@@ -414,7 +450,7 @@ public:
 				catch (const I_RB_Rollbackable::RegisterSuccess_E& Success)
 				{
 					// Basically illegal activation, in a real use you first would make sure you can activate before actually activating
-					return Success == I_RB_Rollbackable::RegisterSuccess_E::UnreachablePastFrame && Setup.LocalFrameAdvantageInFrames > DATA_CFG::Get().RollbackBufferMaxSize();
+					return Success == I_RB_Rollbackable::RegisterSuccess_E::UnreachablePastFrame && Setup.InitialLatencyInFrames > DATA_CFG::Get().RollbackBufferMaxSize();
 				}
 			}
 		}
@@ -459,9 +495,9 @@ public:
 			TrueRemotePlayer2.ActivateNow(TrueRemotePlayer2Identity);
 		}
 
-		if (FrameIndex == RemoteStartFrameIndex + Setup.LocalFrameAdvantageInFrames)
+		if (FrameIndex == RemoteStartFrameIndex + Setup.InitialLatencyInFrames)
 		{
-			if (Setup.LocalFrameAdvantageInFrames == 0)
+			if (Setup.InitialLatencyInFrames == 0)
 			{
 				RemotePlayer1.ActivateNow(RemotePlayer1Identity);
 			}
@@ -474,7 +510,7 @@ public:
 				catch (const I_RB_Rollbackable::RegisterSuccess_E& Success)
 				{
 					// Basically illegal activation, in a real use you first would make sure you can activate before actually activating
-					return Success == I_RB_Rollbackable::RegisterSuccess_E::UnreachablePastFrame && Setup.LocalFrameAdvantageInFrames > DATA_CFG::Get().RollbackBufferMaxSize();
+					return Success == I_RB_Rollbackable::RegisterSuccess_E::UnreachablePastFrame && Setup.InitialLatencyInFrames > DATA_CFG::Get().RollbackBufferMaxSize();
 				}
 			}
 		}
@@ -498,10 +534,18 @@ bool Test1Local2RemoteMockRollback(const DATA_CFG Config, const TestEnvironment 
 
 	DATA_CFG::Load(Config);
 
-	// * 2 because you need one transfer to get/send the inputs and then another one to get/send the updated checksum
-	const bool AllowStarvedForInput = (size_t)Environment.ReceiveRemoteIntervalInFrames * 2 > Config.RollbackBufferMaxSize();
-	
-	const auto RemoteStartMockIterationIndex = Setup.LocalStartFrameIndex + Setup.RemoteStartOffsetInFrames + Setup.LocalFrameAdvantageInFrames;
+	if (Setup.InitialLatencyInFrames > Config.RollbackConfiguration.RollbackBufferMinSize)
+	{
+		return true;
+	}
+
+	const bool AllowLocalDoubleSimulation = Setup.LocalMockHardwareFrameDurationInSeconds > Config.SimulationConfiguration.FrameDurationInSeconds;
+	const bool AllowRemoteDoubleSimulation = Setup.RemoteMockHardwareFrameDurationInSeconds > Config.SimulationConfiguration.FrameDurationInSeconds;
+	const bool RoundTripPossibleWithinRollbackWindow = (size_t)Environment.ReceiveRemoteIntervalInFrames * 2 <= Config.RollbackConfiguration.RollbackBufferMinSize && Setup.InitialLatencyInFrames < Config.RollbackConfiguration.RollbackBufferMinSize;
+	const bool AllowLocalStarvedForInput = (Setup.RemoteMockHardwareFrameDurationInSeconds > Setup.LocalMockHardwareFrameDurationInSeconds && AllowRemoteDoubleSimulation) || !RoundTripPossibleWithinRollbackWindow;
+	const bool AllowRemoteStarvedForInput = (Setup.LocalMockHardwareFrameDurationInSeconds > Setup.RemoteMockHardwareFrameDurationInSeconds && AllowLocalDoubleSimulation) || !RoundTripPossibleWithinRollbackWindow;
+
+	const auto RemoteStartMockIterationIndex = Setup.LocalStartFrameIndex + Setup.RemoteStartOffsetInFrames + Setup.InitialLatencyInFrames;
 
 	TEST_NSPC_Systems::LocalMock Local(Setup);
 	TEST_NSPC_Systems::RemoteMock Remote(Setup);
@@ -520,16 +564,16 @@ bool Test1Local2RemoteMockRollback(const DATA_CFG Config, const TestEnvironment 
 
 		Local.Update
 		({
-			Setup.LocalMockHardwareFrameDurationInSeconds >= 2.f * Config.SimulationConfiguration.FrameDurationInSeconds,
-			Environment.ReceiveRemoteIntervalInFrames > 1,
-			AllowStarvedForInput,
+			AllowLocalDoubleSimulation,
+			Environment.ReceiveRemoteIntervalInFrames > 1 || AllowLocalDoubleSimulation || AllowLocalStarvedForInput || Setup.InitialLatencyInFrames > 0,
+			AllowLocalStarvedForInput,
 			Setup.LocalMockHardwareFrameDurationInSeconds < Config.SimulationConfiguration.FrameDurationInSeconds
 		});
 		Remote.Update
 		({
-			Setup.RemoteMockHardwareFrameDurationInSeconds >= 2.f * Config.SimulationConfiguration.FrameDurationInSeconds,
-			Environment.ReceiveRemoteIntervalInFrames > 1,
-			AllowStarvedForInput,
+			AllowRemoteDoubleSimulation,
+			Environment.ReceiveRemoteIntervalInFrames > 1 || AllowRemoteDoubleSimulation || AllowRemoteStarvedForInput || Setup.InitialLatencyInFrames > 0,
+			AllowRemoteStarvedForInput,
 			Setup.RemoteMockHardwareFrameDurationInSeconds < Config.SimulationConfiguration.FrameDurationInSeconds
 		});
 

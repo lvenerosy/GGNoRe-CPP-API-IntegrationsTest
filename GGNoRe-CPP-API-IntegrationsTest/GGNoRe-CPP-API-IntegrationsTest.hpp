@@ -22,7 +22,7 @@ struct PlayersSetup
 	bool UseRandomInputs = false;
 	uint16_t LocalStartFrameIndex = 0;
 	uint16_t RemoteStartOffsetInFrames = 2;
-	uint16_t LocalFrameAdvantageInFrames = 3;
+	uint16_t InitialLatencyInFrames = 3;
 	float LocalMockHardwareFrameDurationInSeconds = 0.016667f;
 	float RemoteMockHardwareFrameDurationInSeconds = 0.016667f;
 };
@@ -67,7 +67,7 @@ int main()
 	struct TestProgress
 	{
 		size_t CurrentTestCounter = 0;
-		const size_t StartTestIndex = 0;
+		const size_t StartTestIndex = 65;
 	};
 	TestProgress Progress;
 	RangeFunctorChain Tests;
@@ -100,7 +100,7 @@ int main()
 	Tests = GetRangeFunctor(std::array<bool, 2>{ false, true }, Setup.UseRandomInputs, Tests);
 	Tests = GetRangeFunctor(std::array<uint16_t, 3>{ 0, 1, 10 }, Setup.LocalStartFrameIndex, Tests);
 	Tests = GetRangeFunctor(std::array<uint16_t, 3>{ 0, 2, 5 }, Setup.RemoteStartOffsetInFrames, Tests);
-	Tests = GetRangeFunctor(std::array<uint16_t, 3>{ 0, 2, 5 }, Setup.LocalFrameAdvantageInFrames, Tests);
+	Tests = GetRangeFunctor(std::array<uint16_t, 3>{ 0, 2, 5 }, Setup.InitialLatencyInFrames, Tests);
 	// 120fps, 60fps, 40fps, 16fps, hard coded to avoid precision issues
 	Tests = GetRangeFunctor(std::array<float, 4>{ 0.008333f, 0.016667f, 0.025f, 0.0625f }, Setup.LocalMockHardwareFrameDurationInSeconds, Tests);
 	// 90fps, 60fps, 30fps, hard coded to avoid precision issues
