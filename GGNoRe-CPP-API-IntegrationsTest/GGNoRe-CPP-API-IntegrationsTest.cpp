@@ -20,7 +20,12 @@ static inline void TestLog(const std::string& Message)
 
 class TEST_CPT_IPT_Emulator final : public ABS_CPT_IPT_Emulator
 {
-	DATA_Player OwnerInternal;
+	struct Ownership
+	{
+		DATA_Player Owner;
+		uint16_t LatestOwnerChangeFrameIndex = 0;
+	};
+	Ownership CurrentOwnership;
 
 	std::set<uint8_t> LocalMockInputs;
 	const bool UseRandomInputs = false;
@@ -33,7 +38,7 @@ public:
 	{
 	}
 
-	inline DATA_Player Owner() const { return OwnerInternal; }
+	inline DATA_Player Owner() const { return CurrentOwnership.Owner; }
 
 	inline const std::vector<uint8_t>& LatestInputs() const
 	{
@@ -43,7 +48,7 @@ public:
 
 	inline bool ShouldSendInputsToTarget(const uint8_t TargetSystemIndex) const
 	{
-		return OwnerInternal.SystemIndex != TargetSystemIndex && OwnerInternal.IsLocal && !Inputs.empty();
+		return CurrentOwnership.Owner.SystemIndex != TargetSystemIndex && CurrentOwnership.Owner.IsLocal && !Inputs.empty();
 	}
 
 	~TEST_CPT_IPT_Emulator() = default;
@@ -51,10 +56,14 @@ public:
 protected:
 	void OnRegisterActivationChange(const RegisterActivationChangeEvent RegisteredActivationChange, const ActivationChangeEvent ActivationChange) override
 	{
-		if (RegisteredActivationChange.Success == I_RB_Rollbackable::RegisterSuccess_E::Registered)
+		if (RegisteredActivationChange.Success == I_RB_Rollbackable::RegisterSuccess_E::Registered || RegisteredActivationChange.Success == I_RB_Rollbackable::RegisterSuccess_E::PreStart)
 		{
 			// Both OnRegisterActivationChange and ShouldSendInputsToTarget happen outside of the simulation so they can be properly ordered so that the owner is valid
-			OwnerInternal = ActivationChange.Owner;
+			// The change of owner happens here and not inside OnActivationChange because the transfer of inputs should happen under the real most recent ownership as opposed to the simulated one
+			if (ActivationChange.FrameIndex >= CurrentOwnership.LatestOwnerChangeFrameIndex)
+			{
+				CurrentOwnership = { ActivationChange.Owner, ActivationChange.FrameIndex };
+			}
 		}
 		else
 		{
@@ -132,7 +141,7 @@ public:
 protected:
 	void OnRegisterActivationChange(const RegisterActivationChangeEvent RegisteredActivationChange, const ActivationChangeEvent ActivationChange) override
 	{
-		if (RegisteredActivationChange.Success != I_RB_Rollbackable::RegisterSuccess_E::Registered)
+		if (RegisteredActivationChange.Success != I_RB_Rollbackable::RegisterSuccess_E::Registered && RegisteredActivationChange.Success != I_RB_Rollbackable::RegisterSuccess_E::PreStart)
 		{
 			throw RegisteredActivationChange.Success;
 		}
@@ -142,10 +151,13 @@ protected:
 
 	void OnRollActivationChangeBack(const ActivationChangeEvent ActivationChange) override
 	{
+		// If the activation change that is roll backed was an activation
 		if (ActivationChange.Type == ActivationChangeEvent::ChangeType_E::Activate)
 		{
+			// When rollbacking, the order of the callbacks is: OnRollActivationChangeBack -> OnSerialize -> OnActivationChange
+			// So resetting is needed for an accurate serialization
 			PlayerState.Reset();
-			PlayerState.LogHumanReadable("{TEST ROLL ACTIVATION BACK}");
+			PlayerState.LogHumanReadable("{TEST SAVE STATES ROLL ACTIVATION BACK}");
 		}
 	}
 
@@ -166,7 +178,7 @@ protected:
 
 		std::memcpy(TargetBufferOut.data() + CopyOffset, &PlayerState.DeltaDurationAccumulatorInSeconds, sizeof(PlayerState.DeltaDurationAccumulatorInSeconds));
 
-		PlayerState.LogHumanReadable("{TEST SERIALIZE}");
+		PlayerState.LogHumanReadable("{TEST SAVE STATES SERIALIZE}");
 	}
 
 	void OnDeserialize(const std::vector<uint8_t>& SourceBuffer) override
@@ -181,11 +193,11 @@ protected:
 
 			std::memcpy(&PlayerState.DeltaDurationAccumulatorInSeconds, SourceBuffer.data() + ReadOffset, sizeof(PlayerState.DeltaDurationAccumulatorInSeconds));
 
-			PlayerState.LogHumanReadable("{TEST DESERIALIZE SUCCESS}");
+			PlayerState.LogHumanReadable("{TEST SAVE STATES DESERIALIZE SUCCESS}");
 		}
 		else
 		{
-			PlayerState.LogHumanReadable("{TEST DESERIALIZE FAILURE}");
+			PlayerState.LogHumanReadable("{TEST SAVE STATES DESERIALIZE FAILURE}");
 		}
 	}
 
@@ -206,7 +218,7 @@ public:
 protected:
 	void OnRegisterActivationChange(const RegisterActivationChangeEvent RegisteredActivationChange, const ActivationChangeEvent ActivationChange) override
 	{
-		if (RegisteredActivationChange.Success != I_RB_Rollbackable::RegisterSuccess_E::Registered)
+		if (RegisteredActivationChange.Success != I_RB_Rollbackable::RegisterSuccess_E::Registered && RegisteredActivationChange.Success != I_RB_Rollbackable::RegisterSuccess_E::PreStart)
 		{
 			throw RegisteredActivationChange.Success;
 		}
@@ -313,7 +325,8 @@ static void TransferLocalPlayersInputs()
 	{
 		auto CurrentFrameIndex = SystemMultiton::GetRollbackable(SystemIndex).UnsimulatedFrameIndex();
 
-		for (auto Player : TEST_Player::Players())
+		const auto& Players = TEST_Player::Players();
+		for (auto Player : Players)
 		{
 			if (Player->Emulator().ShouldSendInputsToTarget(SystemIndex))
 			{
