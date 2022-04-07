@@ -48,7 +48,7 @@ public:
 
 	inline bool ShouldSendInputsToTarget(const uint8_t TargetSystemIndex) const
 	{
-		return CurrentOwnership.Owner.SystemIndex != TargetSystemIndex && CurrentOwnership.Owner.IsLocal && !Inputs.empty();
+		return CurrentOwnership.Owner.SystemIndex != TargetSystemIndex && CurrentOwnership.Owner.Local && !Inputs.empty();
 	}
 
 	~TEST_CPT_IPT_Emulator() = default;
@@ -84,7 +84,7 @@ protected:
 	void OnStarvedForInputFrame(const uint16_t FrameIndex) override {}
 	void OnStallAdvantageFrame(const uint16_t FrameIndex) override {}
 	void OnStayCurrentFrame(const uint16_t FrameIndex) override {}
-	void OnPreToNextFrame(const uint16_t FrameIndex) override {}
+	void OnToNextFrame(const uint16_t FrameIndex) override {}
 
 	const std::set<uint8_t>& OnPollLocalInputs() override
 	{
@@ -164,7 +164,7 @@ protected:
 	void OnStarvedForInputFrame(const uint16_t FrameIndex) override {}
 	void OnStallAdvantageFrame(const uint16_t FrameIndex) override {}
 	void OnStayCurrentFrame(const uint16_t FrameIndex) override {}
-	void OnPreToNextFrame(const uint16_t FrameIndex) override {}
+	void OnToNextFrame(const uint16_t FrameIndex) override {}
 
 	void OnSerialize(std::vector<uint8_t>& TargetBufferOut) override
 	{
@@ -243,7 +243,7 @@ protected:
 	void OnStarvedForInputFrame(const uint16_t FrameIndex) override {}
 	void OnStallAdvantageFrame(const uint16_t FrameIndex) override {}
 	void OnStayCurrentFrame(const uint16_t FrameIndex) override {}
-	void OnPreToNextFrame(const uint16_t FrameIndex) override {}
+	void OnToNextFrame(const uint16_t FrameIndex) override {}
 
 	void ResetAndCleanup() noexcept override {}
 };
