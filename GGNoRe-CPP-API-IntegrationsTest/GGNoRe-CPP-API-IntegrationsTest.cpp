@@ -6,7 +6,6 @@
 
 #include <functional>
 #include <set>
-#include <stdlib.h>
 #include <utility>
 
 using namespace GGNoRe::API;
@@ -463,7 +462,7 @@ public:
 				catch (const I_RB_Rollbackable::RegisterSuccess_E& Success)
 				{
 					// Basically illegal activation, in a real use you first would make sure you can activate before actually activating
-					return Success == I_RB_Rollbackable::RegisterSuccess_E::UnreachablePastFrame && Setup.InitialLatencyInFrames > DATA_CFG::Get().RollbackBufferMaxSize();
+					return Success == I_RB_Rollbackable::RegisterSuccess_E::UnreachablePastFrame && Setup.InitialLatencyInFrames > DATA_CFG::Get().RollbackFrameCount();
 				}
 			}
 		}
@@ -523,7 +522,7 @@ public:
 				catch (const I_RB_Rollbackable::RegisterSuccess_E& Success)
 				{
 					// Basically illegal activation, in a real use you first would make sure you can activate before actually activating
-					return Success == I_RB_Rollbackable::RegisterSuccess_E::UnreachablePastFrame && Setup.InitialLatencyInFrames > DATA_CFG::Get().RollbackBufferMaxSize();
+					return Success == I_RB_Rollbackable::RegisterSuccess_E::UnreachablePastFrame && Setup.InitialLatencyInFrames > DATA_CFG::Get().RollbackFrameCount();
 				}
 			}
 		}
@@ -547,45 +546,46 @@ bool Test1Local2RemoteMockRollback(const DATA_CFG Config, const TestEnvironment 
 
 	DATA_CFG::Load(Config);
 
-	if (Setup.InitialLatencyInFrames > Config.RollbackConfiguration.RollbackBufferMinSize)
+	if (Setup.InitialLatencyInFrames > Config.RollbackConfiguration.MinRollbackFrameCount)
 	{
 		return true;
 	}
 
 	const bool AllowLocalDoubleSimulation = Setup.LocalMockHardwareFrameDurationInSeconds > Config.SimulationConfiguration.FrameDurationInSeconds;
 	const bool AllowRemoteDoubleSimulation = Setup.RemoteMockHardwareFrameDurationInSeconds > Config.SimulationConfiguration.FrameDurationInSeconds;
-	const bool RoundTripPossibleWithinRollbackWindow = (size_t)Environment.ReceiveRemoteIntervalInFrames * 2 <= Config.RollbackConfiguration.RollbackBufferMinSize && Setup.InitialLatencyInFrames < Config.RollbackConfiguration.RollbackBufferMinSize;
-	const bool AllowLocalStarvedForInput = (Setup.RemoteMockHardwareFrameDurationInSeconds > Setup.LocalMockHardwareFrameDurationInSeconds && AllowRemoteDoubleSimulation) || !RoundTripPossibleWithinRollbackWindow;
-	const bool AllowRemoteStarvedForInput = (Setup.LocalMockHardwareFrameDurationInSeconds > Setup.RemoteMockHardwareFrameDurationInSeconds && AllowLocalDoubleSimulation) || !RoundTripPossibleWithinRollbackWindow;
+	const bool AllowLocalStallAdvantage = Environment.ReceiveRemoteIntervalInFrames > 1 || AllowLocalDoubleSimulation || Setup.InitialLatencyInFrames > 0;
+	const bool AllowRemoteStallAdvantage = Environment.ReceiveRemoteIntervalInFrames > 1 || AllowRemoteDoubleSimulation || Setup.InitialLatencyInFrames > 0;
+	const bool RoundTripPossibleWithinRollbackWindow = (size_t)Environment.ReceiveRemoteIntervalInFrames + 1 <= Config.RollbackConfiguration.MinRollbackFrameCount && Setup.InitialLatencyInFrames < Config.RollbackConfiguration.MinRollbackFrameCount;
+	const bool AllowLocalStarvedForInput =
+		(size_t)Environment.ReceiveRemoteIntervalInFrames + 1 + AllowRemoteStallAdvantage + AllowLocalDoubleSimulation >= Config.RollbackConfiguration.MinRollbackFrameCount ||
+		AllowRemoteDoubleSimulation ||
+		!RoundTripPossibleWithinRollbackWindow;
+	const bool AllowRemoteStarvedForInput =
+		(size_t)Environment.ReceiveRemoteIntervalInFrames + 1 + AllowLocalStallAdvantage + AllowRemoteDoubleSimulation >= Config.RollbackConfiguration.MinRollbackFrameCount ||
+		AllowLocalDoubleSimulation ||
+		!RoundTripPossibleWithinRollbackWindow;
 
 	const auto RemoteStartMockIterationIndex = Setup.LocalStartFrameIndex + Setup.RemoteStartOffsetInFrames + Setup.InitialLatencyInFrames;
 
 	TEST_NSPC_Systems::LocalMock Local(Setup);
 	TEST_NSPC_Systems::RemoteMock Remote(Setup);
 
-	srand(0);
-
 	for (size_t IterationIndex = 0; IterationIndex < Environment.TestDurationInFrames; ++IterationIndex)
 	{
 		assert(Local.PreUpdate((uint16_t)IterationIndex));
 		assert(Remote.PreUpdate((uint16_t)IterationIndex));
 
-		if (IterationIndex == RemoteStartMockIterationIndex)
-		{
-			TEST_NSPC_Systems::TransferLocalPlayersInputs();
-		}
-
 		Local.Update
 		({
 			AllowLocalDoubleSimulation,
-			Environment.ReceiveRemoteIntervalInFrames > 1 || AllowLocalDoubleSimulation || AllowLocalStarvedForInput || Setup.InitialLatencyInFrames > 0,
+			AllowLocalStallAdvantage,
 			AllowLocalStarvedForInput,
 			Setup.LocalMockHardwareFrameDurationInSeconds < Config.SimulationConfiguration.FrameDurationInSeconds
 		});
 		Remote.Update
 		({
 			AllowRemoteDoubleSimulation,
-			Environment.ReceiveRemoteIntervalInFrames > 1 || AllowRemoteDoubleSimulation || AllowRemoteStarvedForInput || Setup.InitialLatencyInFrames > 0,
+			AllowRemoteStallAdvantage,
 			AllowRemoteStarvedForInput,
 			Setup.RemoteMockHardwareFrameDurationInSeconds < Config.SimulationConfiguration.FrameDurationInSeconds
 		});

@@ -7,7 +7,8 @@
 #include <GGNoRe-CPP-API.hpp>
 
 #include <array>
-#include <assert.h>
+#include <cassert>
+#include <cstdlib>
 #include <functional>
 #include <iostream>
 
@@ -87,7 +88,7 @@ int main()
 
 	Tests = GetRangeFunctor(std::array<size_t, 4>{ 0, 1, 2, 3 }, Config.RollbackConfiguration.DelayFramesCount, TestRunner);
 	Tests = GetRangeFunctor(std::array<size_t, 4>{ 0, 1, 2, 3 }, Config.RollbackConfiguration.InputLeniencyFramesCount, Tests);
-	Tests = GetRangeFunctor(std::array<size_t, 3>{ 1, 4, 7 }, Config.RollbackConfiguration.RollbackBufferMinSize, Tests);
+	Tests = GetRangeFunctor(std::array<size_t, 3>{ 1, 4, 7 }, Config.RollbackConfiguration.MinRollbackFrameCount, Tests);
 	Tests = GetRangeFunctor(std::array<bool, 1>{ false }, Config.RollbackConfiguration.ForceMaximumRollback, Tests);
 
 	// 144hz, 60hz, 45hz, 30hz, hard coded to avoid precision issues
@@ -106,6 +107,7 @@ int main()
 	// 90fps, 60fps, 30fps, hard coded to avoid precision issues
 	Tests = GetRangeFunctor(std::array<float, 3>{ 0.011111f, 0.016667f, 0.033333f }, Setup.RemoteMockHardwareFrameDurationInSeconds, Tests);
 
+	srand(0);
 	Tests.RangeFunctor();
 
 	return 0;
