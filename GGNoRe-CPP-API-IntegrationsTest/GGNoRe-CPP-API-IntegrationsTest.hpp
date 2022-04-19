@@ -98,7 +98,7 @@ int main()
 
 	Tests = GetRangeFunctor(std::array<uint16_t, 3>{ 1, 2, 5 }, Environment.ReceiveRemoteIntervalInFrames, Tests);
 
-	Tests = GetRangeFunctor(std::array<bool, 2>{ false, true }, Setup.UseRandomInputs, Tests);
+	Tests = GetRangeFunctor(std::array<bool, 1>{ false }, Setup.UseRandomInputs, Tests);
 	Tests = GetRangeFunctor(std::array<uint16_t, 3>{ 0, 1, 10 }, Setup.LocalStartFrameIndex, Tests);
 	Tests = GetRangeFunctor(std::array<uint16_t, 3>{ 0, 2, 5 }, Setup.RemoteStartOffsetInFrames, Tests);
 	Tests = GetRangeFunctor(std::array<uint16_t, 3>{ 0, 2, 5 }, Setup.InitialLatencyInFrames, Tests);

@@ -4,6 +4,8 @@
 
 #include <GGNoRe-CPP-API-IntegrationsTest.hpp>
 
+#include <Input/CPT_IPT_TogglesPacket.hpp>
+
 #include <functional>
 #include <set>
 #include <utility>
@@ -89,15 +91,15 @@ protected:
 	{
 		if (UseRandomInputs)
 		{
-			LocalMockInputs = { {(uint8_t)(rand() % CPT_IPT_TogglesPayload::MaxInputToken())} };
+			LocalMockInputs = { {(uint8_t)(rand() % CPT_IPT_TogglesPacket::MaxInputToken())} };
 		}
 
 		return LocalMockInputs;
 	}
 
-	void OnReadyToSendInputs(const std::vector<uint8_t>& BinaryPayload) override
+	void OnReadyToSendInputs(const std::vector<uint8_t>& BinaryPacket) override
 	{
-		Inputs = BinaryPayload;
+		Inputs = BinaryPacket;
 	}
 
 	void ResetAndCleanup() noexcept override
