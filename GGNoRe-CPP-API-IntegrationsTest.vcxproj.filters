@@ -18,6 +18,12 @@
     <ClInclude Include="GGNoRe-CPP-API-IntegrationsTest\GGNoRe-CPP-API-IntegrationsTest.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="GGNoRe-CPP-API-IntegrationsTest\TEST_Components.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="GGNoRe-CPP-API-IntegrationsTest\TEST_Mocks.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="GGNoRe-CPP-API-IntegrationsTest\GGNoRe-CPP-API-IntegrationsTest.cpp">

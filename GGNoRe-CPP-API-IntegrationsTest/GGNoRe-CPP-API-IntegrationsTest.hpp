@@ -58,17 +58,10 @@ int main()
 	TestEnvironment Environment;
 	PlayersSetup Setup;
 
-	// A one off test to do a quick sanity check
-	//Config.RollbackConfiguration = { 0, 0, 1, false };
-	//Config.SimulationConfiguration = { 0.016667f, 0.f, 0.f };
-	//Environment = { 60, 1 };
-	//Setup = { false, 0, 0, 0, 0.008333f, 0.008333f };
-	//assert(Test1Local2RemoteMockRollback(Config, Environment, Setup));
-
 	struct TestProgress
 	{
 		size_t CurrentTestCounter = 0;
-		const size_t StartTestIndex = 1;
+		const size_t StartTestIndex = 2305;
 	};
 	TestProgress Progress;
 	RangeFunctorChain Tests;
@@ -91,7 +84,7 @@ int main()
 	Tests = GetRangeFunctor(std::array<size_t, 3>{ 1, 4, 7 }, Config.RollbackConfiguration.MinRollbackFrameCount, Tests);
 	Tests = GetRangeFunctor(std::array<bool, 1>{ false }, Config.RollbackConfiguration.ForceMaximumRollback, Tests);
 
-	// 144hz, 60hz, 45hz, 30hz, hard coded to avoid precision issues
+	// 144hz, 60hz, 45hz, 30hz
 	Tests = GetRangeFunctor(std::array<float, 4>{ 0.006944f, 0.016667f, 0.022222f, 0.033333f }, Config.SimulationConfiguration.FrameDurationInSeconds, Tests);
 	Tests = GetRangeFunctor(std::array<float, 2>{ 0.f, 60.f * 0.016667f }, Config.SimulationConfiguration.StallTimerDurationInSeconds, Tests);
 	Tests = GetRangeFunctor(std::array<float, 2>{ 0.f, 60.f * 0.016667f }, Config.SimulationConfiguration.DoubleSimulationTimerDurationInSeconds, Tests);
@@ -102,9 +95,9 @@ int main()
 	Tests = GetRangeFunctor(std::array<uint16_t, 3>{ 0, 1, 10 }, Setup.LocalStartFrameIndex, Tests);
 	Tests = GetRangeFunctor(std::array<uint16_t, 3>{ 0, 2, 5 }, Setup.RemoteStartOffsetInFrames, Tests);
 	Tests = GetRangeFunctor(std::array<uint16_t, 3>{ 0, 2, 5 }, Setup.InitialLatencyInFrames, Tests);
-	// 120fps, 60fps, 40fps, 16fps, hard coded to avoid precision issues
+	// 120fps, 60fps, 40fps, 16fps
 	Tests = GetRangeFunctor(std::array<float, 4>{ 0.008333f, 0.016667f, 0.025f, 0.0625f }, Setup.LocalMockHardwareFrameDurationInSeconds, Tests);
-	// 90fps, 60fps, 30fps, hard coded to avoid precision issues
+	// 90fps, 60fps, 30fps
 	Tests = GetRangeFunctor(std::array<float, 3>{ 0.011111f, 0.016667f, 0.033333f }, Setup.RemoteMockHardwareFrameDurationInSeconds, Tests);
 
 	srand(0);
