@@ -85,6 +85,8 @@ protected:
 		}
 	}
 
+	void OnActivationChangeStartingFrame(const ActivationChangeEvent ActivationChange) override {}
+
 	void OnRollActivationChangeBack(const ActivationChangeEvent ActivationChange) override {}
 
 	void OnStarvedForInputFrame(const uint16_t FrameIndex) override {}
@@ -154,6 +156,8 @@ protected:
 	}
 
 	void OnActivationChange(const ActivationChangeEvent ActivationChange) override {}
+
+	void OnActivationChangeStartingFrame(const ActivationChangeEvent ActivationChange) override {}
 
 	void OnRollActivationChangeBack(const ActivationChangeEvent ActivationChange) override
 	{
@@ -231,6 +235,8 @@ protected:
 	}
 
 	void OnActivationChange(const ActivationChangeEvent ActivationChange) override {}
+
+	void OnActivationChangeStartingFrame(const ActivationChangeEvent ActivationChange) override {}
 
 	void OnRollActivationChangeBack(const ActivationChangeEvent ActivationChange) override {}
 

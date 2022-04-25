@@ -107,7 +107,7 @@ static void ForceResetAndCleanup()
 
 class TEST_ABS_SystemMock
 {
-	size_t MockIterationIndex = 0;
+	size_t MockTickIndex = 0;
 	float UpdateTimer = 0.f;
 
 public:
@@ -124,59 +124,86 @@ protected:
 	const uint16_t RemoteStartFrameIndex = 0;
 
 	TEST_ABS_SystemMock(const PlayersSetup Setup)
-		:Setup(Setup),
-		RemoteStartFrameIndex(Setup.LocalStartFrameIndex + Setup.RemoteStartOffsetInFrames)
+		:Setup(Setup), RemoteStartFrameIndex(Setup.LocalStartFrameIndex + Setup.RemoteStartOffsetInFrames)
 	{}
 
-	bool Tick(float DeltaDurationInSeconds, const uint8_t SystemIndex, const OutcomesSanityCheck AllowedOutcomes)
+	virtual void OnPreUpdate(const uint16_t TestFrameIndex) = 0;
+
+	virtual uint8_t SystemIndex() const = 0;
+
+	virtual const TEST_Player& Player() const = 0;
+
+	virtual float DeltaDurationInSeconds() const = 0;
+
+public:
+	virtual ~TEST_ABS_SystemMock() = default;
+
+	bool IsRunning() const
 	{
-		TestLog("____________ SYSTEM " + std::to_string(SystemIndex) + " START - ITERATION " + std::to_string(MockIterationIndex) + " ____________");
+		return Player().Emulator().ExistsAtFrame(GGNoRe::API::SystemMultiton::GetRollbackable(SystemIndex()).UnsimulatedFrameIndex());
+	}
 
-		auto Success = GGNoRe::API::SystemMultiton::GetRollbackable(SystemIndex).TryTickingToNextFrame(DeltaDurationInSeconds);
-
-		switch (Success)
+	void PreUpdate(const uint16_t TestFrameIndex)
+	{
+		try
 		{
-		case GGNoRe::API::ABS_RB_Rollbackable::SINGLETON::TickSuccess_E::DoubleSimulation:
-			TestLog("^^^^^^^^^^^^ SYSTEM " + std::to_string(SystemIndex) + " DOUBLE - ITERATION " + std::to_string(MockIterationIndex) + " ^^^^^^^^^^^^");
-			assert(AllowedOutcomes.AllowDoubleSimulation);
-			break;
-		case GGNoRe::API::ABS_RB_Rollbackable::SINGLETON::TickSuccess_E::StallAdvantage:
-			TestLog("^^^^^^^^^^^^ SYSTEM " + std::to_string(SystemIndex) + " STALLING - ITERATION " + std::to_string(MockIterationIndex) + " ^^^^^^^^^^^^");
-			assert(AllowedOutcomes.AllowStallAdvantage);
-			break;
-		case GGNoRe::API::ABS_RB_Rollbackable::SINGLETON::TickSuccess_E::StarvedForInput:
-			TestLog("^^^^^^^^^^^^ SYSTEM " + std::to_string(SystemIndex) + " STARVED - ITERATION " + std::to_string(MockIterationIndex) + " ^^^^^^^^^^^^");
-			assert(AllowedOutcomes.AllowStarvedForInput);
-			break;
-		case GGNoRe::API::ABS_RB_Rollbackable::SINGLETON::TickSuccess_E::StayCurrent:
-			TestLog("^^^^^^^^^^^^ SYSTEM " + std::to_string(SystemIndex) + " STAY - ITERATION " + std::to_string(MockIterationIndex) + " ^^^^^^^^^^^^");
-			assert(AllowedOutcomes.AllowStayCurrent);
-			break;
-		case GGNoRe::API::ABS_RB_Rollbackable::SINGLETON::TickSuccess_E::ToNext:
-			TestLog("^^^^^^^^^^^^ SYSTEM " + std::to_string(SystemIndex) + " NEXT - ITERATION " + std::to_string(MockIterationIndex) + " ^^^^^^^^^^^^");
-			break;
-		default:
-			assert(false);
-			break;
+			OnPreUpdate(TestFrameIndex);
 		}
-
-		++MockIterationIndex;
-
-		UpdateTimer += DeltaDurationInSeconds;
-		if (UpdateTimer >= GGNoRe::API::DATA_CFG::Get().SimulationConfiguration.FrameDurationInSeconds)
+		catch (const GGNoRe::API::I_RB_Rollbackable::RegisterSuccess_E& Success)
 		{
-			UpdateTimer -= GGNoRe::API::DATA_CFG::Get().SimulationConfiguration.FrameDurationInSeconds;
-			return true;
-		}
-		else
-		{
-			return false;
+			// Basically illegal activation, in a real use you first would make sure you can activate before actually activating
+			assert(Success == GGNoRe::API::I_RB_Rollbackable::RegisterSuccess_E::UnreachablePastFrame && Setup.InitialLatencyInFrames > GGNoRe::API::DATA_CFG::Get().RollbackFrameCount());
 		}
 	}
 
-public:
-	virtual bool PreUpdate(const uint16_t FrameIndex) = 0;
-	virtual void Update(const OutcomesSanityCheck AllowedOutcomes) = 0;
+	void Update(const OutcomesSanityCheck AllowedOutcomes)
+	{
+		assert(IsRunning());
+
+		bool ReadyForNextFrame = false;
+
+		while (!ReadyForNextFrame)
+		{
+			TestLog("____________ SYSTEM " + std::to_string(SystemIndex()) + " START - TICK " + std::to_string(MockTickIndex) + " ____________");
+
+			auto Success = GGNoRe::API::SystemMultiton::GetRollbackable(SystemIndex()).TryTickingToNextFrame(DeltaDurationInSeconds());
+
+			switch (Success)
+			{
+			case GGNoRe::API::ABS_RB_Rollbackable::SINGLETON::TickSuccess_E::DoubleSimulation:
+				TestLog("^^^^^^^^^^^^ SYSTEM " + std::to_string(SystemIndex()) + " DOUBLE - TICK " + std::to_string(MockTickIndex) + " ^^^^^^^^^^^^");
+				assert(AllowedOutcomes.AllowDoubleSimulation);
+				break;
+			case GGNoRe::API::ABS_RB_Rollbackable::SINGLETON::TickSuccess_E::StallAdvantage:
+				TestLog("^^^^^^^^^^^^ SYSTEM " + std::to_string(SystemIndex()) + " STALLING - TICK " + std::to_string(MockTickIndex) + " ^^^^^^^^^^^^");
+				assert(AllowedOutcomes.AllowStallAdvantage);
+				break;
+			case GGNoRe::API::ABS_RB_Rollbackable::SINGLETON::TickSuccess_E::StarvedForInput:
+				TestLog("^^^^^^^^^^^^ SYSTEM " + std::to_string(SystemIndex()) + " STARVED - TICK " + std::to_string(MockTickIndex) + " ^^^^^^^^^^^^");
+				assert(AllowedOutcomes.AllowStarvedForInput);
+				break;
+			case GGNoRe::API::ABS_RB_Rollbackable::SINGLETON::TickSuccess_E::StayCurrent:
+				TestLog("^^^^^^^^^^^^ SYSTEM " + std::to_string(SystemIndex()) + " STAY - TICK " + std::to_string(MockTickIndex) + " ^^^^^^^^^^^^");
+				assert(AllowedOutcomes.AllowStayCurrent);
+				break;
+			case GGNoRe::API::ABS_RB_Rollbackable::SINGLETON::TickSuccess_E::ToNext:
+				TestLog("^^^^^^^^^^^^ SYSTEM " + std::to_string(SystemIndex()) + " NEXT - TICK " + std::to_string(MockTickIndex) + " ^^^^^^^^^^^^");
+				break;
+			default:
+				assert(false);
+				break;
+			}
+
+			++MockTickIndex;
+
+			UpdateTimer += DeltaDurationInSeconds();
+			if (UpdateTimer >= GGNoRe::API::DATA_CFG::Get().SimulationConfiguration.FrameDurationInSeconds)
+			{
+				UpdateTimer -= GGNoRe::API::DATA_CFG::Get().SimulationConfiguration.FrameDurationInSeconds;
+				ReadyForNextFrame = true;
+			}
+		}
+	}
 };
 
 }

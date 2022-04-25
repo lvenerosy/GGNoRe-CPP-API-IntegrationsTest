@@ -61,7 +61,7 @@ int main()
 	struct TestProgress
 	{
 		size_t CurrentTestCounter = 0;
-		const size_t StartTestIndex = 2305;
+		const size_t StartTestIndex = 6977; // Run the sln in development mode for optimal speed while keeping asserts, then if an assert is hit start from the failing test and run in debug mode
 	};
 	TestProgress Progress;
 	RangeFunctorChain Tests;
