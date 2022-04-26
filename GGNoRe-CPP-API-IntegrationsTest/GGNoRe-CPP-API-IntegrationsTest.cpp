@@ -22,7 +22,7 @@ class TEST_LocalMock final : public TEST_ABS_SystemMock
 	TEST_Player TrueLocalPlayer1;
 	TEST_Player LocalPlayer2;
 
-	void OnPreUpdate(const uint16_t) override
+	void OnPreUpdate(const uint16_t, const TEST_CPT_State OtherPlayerState) override
 	{
 		const auto FrameIndex = SystemMultiton::GetRollbackable(TrueLocalPlayer1Identity.SystemIndex).UnsimulatedFrameIndex();
 
@@ -42,11 +42,6 @@ class TEST_LocalMock final : public TEST_ABS_SystemMock
 	uint8_t SystemIndex() const override
 	{
 		return 0;
-	}
-
-	const TEST_Player& Player() const override
-	{
-		return TrueLocalPlayer1;
 	}
 
 	float DeltaDurationInSeconds() const override
@@ -71,6 +66,11 @@ public:
 
 		TrueLocalPlayer1.ActivateNow(TrueLocalPlayer1Identity);
 	}
+
+	const TEST_Player& Player() const override
+	{
+		return TrueLocalPlayer1;
+	}
 };
 
 class TEST_RemoteMock final : public TEST_ABS_SystemMock
@@ -81,7 +81,7 @@ class TEST_RemoteMock final : public TEST_ABS_SystemMock
 	TEST_Player TrueRemotePlayer2;
 	TEST_Player RemotePlayer1;
 
-	void OnPreUpdate(const uint16_t TestFrameIndex) override
+	void OnPreUpdate(const uint16_t TestFrameIndex, const TEST_CPT_State OtherPlayerState) override
 	{
 		if (TestFrameIndex == RemoteStartFrameIndex && !TrueRemotePlayer2.Emulator().ExistsAtFrame(TestFrameIndex))
 		{
@@ -112,11 +112,6 @@ class TEST_RemoteMock final : public TEST_ABS_SystemMock
 		return 1;
 	}
 
-	const TEST_Player& Player() const override
-	{
-		return TrueRemotePlayer2;
-	}
-
 	float DeltaDurationInSeconds() const override
 	{
 		return Setup.RemoteMockHardwareFrameDurationInSeconds;
@@ -132,6 +127,11 @@ public:
 		RemotePlayer1(Setup.UseRandomInputs)
 	{
 		assert(Player1Id != Player2Id);
+	}
+
+	const TEST_Player& Player() const override
+	{
+		return TrueRemotePlayer2;
 	}
 };
 
@@ -174,8 +174,8 @@ bool Test1Local2RemoteMockRollback(const DATA_CFG Config, const TestEnvironment 
 	{
 		assert(Local.IsRunning());
 
-		Local.PreUpdate((uint16_t)IterationIndex + Setup.LocalStartFrameIndex);
-		Remote.PreUpdate((uint16_t)IterationIndex + Setup.LocalStartFrameIndex);
+		Local.PreUpdate((uint16_t)IterationIndex + Setup.LocalStartFrameIndex, Remote.Player().State());
+		Remote.PreUpdate((uint16_t)IterationIndex + Setup.LocalStartFrameIndex, Local.Player().State());
 
 		Local.Update
 		({

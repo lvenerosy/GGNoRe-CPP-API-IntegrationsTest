@@ -85,7 +85,7 @@ protected:
 		}
 	}
 
-	void OnActivationChangeStartingFrame(const ActivationChangeEvent ActivationChange) override {}
+	void OnActivationChangeStartingFrame(const ActivationChangeEvent ActivationChange, const float PreActivationConsumedDeltaDurationInSeconds) override {}
 
 	void OnRollActivationChangeBack(const ActivationChangeEvent ActivationChange) override {}
 
@@ -157,7 +157,7 @@ protected:
 
 	void OnActivationChange(const ActivationChangeEvent ActivationChange) override {}
 
-	void OnActivationChangeStartingFrame(const ActivationChangeEvent ActivationChange) override {}
+	void OnActivationChangeStartingFrame(const ActivationChangeEvent ActivationChange, const float PreActivationConsumedDeltaDurationInSeconds) override {}
 
 	void OnRollActivationChangeBack(const ActivationChangeEvent ActivationChange) override
 	{
@@ -236,7 +236,7 @@ protected:
 
 	void OnActivationChange(const ActivationChangeEvent ActivationChange) override {}
 
-	void OnActivationChangeStartingFrame(const ActivationChangeEvent ActivationChange) override {}
+	void OnActivationChangeStartingFrame(const ActivationChangeEvent ActivationChange, const float PreActivationConsumedDeltaDurationInSeconds) override {}
 
 	void OnRollActivationChangeBack(const ActivationChangeEvent ActivationChange) override {}
 

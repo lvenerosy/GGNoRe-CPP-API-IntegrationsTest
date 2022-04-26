@@ -13,9 +13,10 @@ class TEST_Player final
 	static std::set<TEST_Player*> PlayersInternal;
 	static uint32_t DebugIdCounter;
 
+	// To identify more quickly which is which when debugging
 	uint32_t DebugId = 0;
 
-	TEST_CPT_State State;
+	TEST_CPT_State StateInternal;
 
 	TEST_CPT_IPT_Emulator EmulatorInternal;
 	TEST_CPT_RB_SaveStates SaveStatesInternal;
@@ -23,7 +24,7 @@ class TEST_Player final
 
 public:
 	explicit TEST_Player(const bool UseRandomInputs)
-		:EmulatorInternal(UseRandomInputs), SaveStatesInternal(State), SimulatorInternal(State)
+		:EmulatorInternal(UseRandomInputs), SaveStatesInternal(StateInternal), SimulatorInternal(StateInternal)
 	{
 	}
 
@@ -40,6 +41,11 @@ public:
 	inline const TEST_CPT_IPT_Emulator& Emulator() const
 	{
 		return EmulatorInternal;
+	}
+
+	inline const TEST_CPT_State& State() const
+	{
+		return StateInternal;
 	}
 
 	void ActivateNow(const GGNoRe::API::DATA_Player Owner)
@@ -127,11 +133,9 @@ protected:
 		:Setup(Setup), RemoteStartFrameIndex(Setup.LocalStartFrameIndex + Setup.RemoteStartOffsetInFrames)
 	{}
 
-	virtual void OnPreUpdate(const uint16_t TestFrameIndex) = 0;
+	virtual void OnPreUpdate(const uint16_t TestFrameIndex, const TEST_CPT_State OtherPlayerState) = 0;
 
 	virtual uint8_t SystemIndex() const = 0;
-
-	virtual const TEST_Player& Player() const = 0;
 
 	virtual float DeltaDurationInSeconds() const = 0;
 
@@ -143,11 +147,12 @@ public:
 		return Player().Emulator().ExistsAtFrame(GGNoRe::API::SystemMultiton::GetRollbackable(SystemIndex()).UnsimulatedFrameIndex());
 	}
 
-	void PreUpdate(const uint16_t TestFrameIndex)
+	// The state of the other player is needed to properly initialize
+	void PreUpdate(const uint16_t TestFrameIndex, const TEST_CPT_State OtherPlayerState)
 	{
 		try
 		{
-			OnPreUpdate(TestFrameIndex);
+			OnPreUpdate(TestFrameIndex, OtherPlayerState);
 		}
 		catch (const GGNoRe::API::I_RB_Rollbackable::RegisterSuccess_E& Success)
 		{
@@ -204,6 +209,8 @@ public:
 			}
 		}
 	}
+
+	virtual const TEST_Player& Player() const = 0;
 };
 
 }
