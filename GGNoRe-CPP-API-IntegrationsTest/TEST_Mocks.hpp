@@ -83,7 +83,7 @@ namespace TEST_NSPC_Systems
 
 std::set<uint8_t> SystemIndexes;
 
-static void TransferLocalPlayersInputs()
+void TransferLocalPlayersInputs()
 {
 	for (auto SystemIndex : SystemIndexes)
 	{
@@ -101,7 +101,7 @@ static void TransferLocalPlayersInputs()
 	}
 }
 
-static void ForceResetAndCleanup()
+void ForceResetAndCleanup()
 {
 	for (auto SystemIndex : SystemIndexes)
 	{
@@ -179,6 +179,14 @@ public:
 				TestLog("^^^^^^^^^^^^ SYSTEM " + std::to_string(SystemIndex()) + " DOUBLE - TICK " + std::to_string(MockTickIndex) + " ^^^^^^^^^^^^");
 				assert(AllowedOutcomes.AllowDoubleSimulation);
 				break;
+			case GGNoRe::API::ABS_RB_Rollbackable::SINGLETON::TickSuccess_E::FailedInitialization:
+				TestLog("^^^^^^^^^^^^ SYSTEM " + std::to_string(SystemIndex()) + " FAILURE - TICK " + std::to_string(MockTickIndex) + " ^^^^^^^^^^^^");
+				assert(false);
+			break;
+			case GGNoRe::API::ABS_RB_Rollbackable::SINGLETON::TickSuccess_E::NoActiveEmulator:
+				TestLog("^^^^^^^^^^^^ SYSTEM " + std::to_string(SystemIndex()) + " NO EMULATOR - TICK " + std::to_string(MockTickIndex) + " ^^^^^^^^^^^^");
+				assert(false);
+			break;
 			case GGNoRe::API::ABS_RB_Rollbackable::SINGLETON::TickSuccess_E::StallAdvantage:
 				TestLog("^^^^^^^^^^^^ SYSTEM " + std::to_string(SystemIndex()) + " STALLING - TICK " + std::to_string(MockTickIndex) + " ^^^^^^^^^^^^");
 				assert(AllowedOutcomes.AllowStallAdvantage);

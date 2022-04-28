@@ -17,7 +17,7 @@
 #include <set>
 #include <vector>
 
-static inline void TestLog(const std::string& Message)
+inline void TestLog(const std::string& Message)
 {
 #if GGNORECPPAPI_LOG
 	std::cout << Message << "\n" << std::endl;
