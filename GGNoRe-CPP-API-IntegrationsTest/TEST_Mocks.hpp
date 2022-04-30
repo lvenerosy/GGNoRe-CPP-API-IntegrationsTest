@@ -22,6 +22,32 @@ class TEST_Player final
 	TEST_CPT_RB_SaveStates SaveStatesInternal;
 	TEST_CPT_RB_Simulator SimulatorInternal;
 
+	void OnActivateNow(const GGNoRe::API::DATA_Player Owner)
+	{
+		assert(PlayersInternal.find(this) == PlayersInternal.cend());
+
+		DebugId = DebugIdCounter++;
+
+		PlayersInternal.insert(this);
+
+		EmulatorInternal.ChangeActivationNow(Owner, GGNoRe::API::I_RB_Rollbackable::ActivationChangeEvent::ChangeType_E::Activate);
+		SaveStatesInternal.ChangeActivationNow(Owner, GGNoRe::API::I_RB_Rollbackable::ActivationChangeEvent::ChangeType_E::Activate);
+		SimulatorInternal.ChangeActivationNow(Owner, GGNoRe::API::I_RB_Rollbackable::ActivationChangeEvent::ChangeType_E::Activate);
+	}
+
+	void OnActivateInPast(const GGNoRe::API::DATA_Player Owner, const uint16_t StartFrameIndex)
+	{
+		assert(PlayersInternal.find(this) == PlayersInternal.cend());
+
+		DebugId = DebugIdCounter++;
+
+		PlayersInternal.insert(this);
+
+		EmulatorInternal.ChangeActivationInPast({ GGNoRe::API::I_RB_Rollbackable::ActivationChangeEvent::ChangeType_E::Activate, Owner, StartFrameIndex });
+		SaveStatesInternal.ChangeActivationInPast({ GGNoRe::API::I_RB_Rollbackable::ActivationChangeEvent::ChangeType_E::Activate, Owner, StartFrameIndex });
+		SimulatorInternal.ChangeActivationInPast({ GGNoRe::API::I_RB_Rollbackable::ActivationChangeEvent::ChangeType_E::Activate, Owner, StartFrameIndex });
+	}
+
 public:
 	explicit TEST_Player(const bool UseRandomInputs)
 		:EmulatorInternal(UseRandomInputs), SaveStatesInternal(StateInternal), SimulatorInternal(StateInternal)
@@ -38,40 +64,46 @@ public:
 		return PlayersInternal;
 	}
 
-	inline const TEST_CPT_IPT_Emulator& Emulator() const
-	{
-		return EmulatorInternal;
-	}
-
 	inline const TEST_CPT_State& State() const
 	{
 		return StateInternal;
 	}
 
+	inline const TEST_CPT_IPT_Emulator& Emulator() const
+	{
+		return EmulatorInternal;
+	}
+
 	void ActivateNow(const GGNoRe::API::DATA_Player Owner)
 	{
-		assert(PlayersInternal.find(this) == PlayersInternal.cend());
+		assert(Owner.Local);
 
-		DebugId = DebugIdCounter++;
+		OnActivateNow(Owner);
+	}
 
-		PlayersInternal.insert(this);
+	void ActivateNow(const GGNoRe::API::DATA_Player Owner, const TEST_CPT_State InitialState)
+	{
+		assert(!Owner.Local);
 
-		EmulatorInternal.ChangeActivationNow(Owner, GGNoRe::API::I_RB_Rollbackable::ActivationChangeEvent::ChangeType_E::Activate);
-		SaveStatesInternal.ChangeActivationNow(Owner, GGNoRe::API::I_RB_Rollbackable::ActivationChangeEvent::ChangeType_E::Activate);
-		SimulatorInternal.ChangeActivationNow(Owner, GGNoRe::API::I_RB_Rollbackable::ActivationChangeEvent::ChangeType_E::Activate);
+		StateInternal = InitialState;
+
+		OnActivateNow(Owner);
 	}
 
 	void ActivateInPast(const GGNoRe::API::DATA_Player Owner, const uint16_t StartFrameIndex)
 	{
-		assert(PlayersInternal.find(this) == PlayersInternal.cend());
+		assert(Owner.Local);
 
-		DebugId = DebugIdCounter++;
+		OnActivateInPast(Owner, StartFrameIndex);
+	}
 
-		PlayersInternal.insert(this);
+	void ActivateInPast(const GGNoRe::API::DATA_Player Owner, const uint16_t StartFrameIndex, const TEST_CPT_State InitialState)
+	{
+		assert(!Owner.Local);
 
-		EmulatorInternal.ChangeActivationInPast({ GGNoRe::API::I_RB_Rollbackable::ActivationChangeEvent::ChangeType_E::Activate, Owner, StartFrameIndex });
-		SaveStatesInternal.ChangeActivationInPast({ GGNoRe::API::I_RB_Rollbackable::ActivationChangeEvent::ChangeType_E::Activate, Owner, StartFrameIndex });
-		SimulatorInternal.ChangeActivationInPast({ GGNoRe::API::I_RB_Rollbackable::ActivationChangeEvent::ChangeType_E::Activate, Owner, StartFrameIndex });
+		StateInternal = InitialState;
+
+		OnActivateInPast(Owner, StartFrameIndex);
 	}
 };
 
@@ -115,6 +147,9 @@ class TEST_ABS_SystemMock
 {
 	size_t MockTickIndex = 0;
 	float UpdateTimer = 0.f;
+	// The state of the other player is needed to properly initialize
+	// This is a shortcut, in a real setup you would want to receive from the remote player/server what you need to initialize
+	TEST_CPT_State InitialStateToTransferInternal;
 
 public:
 	struct OutcomesSanityCheck
@@ -133,7 +168,7 @@ protected:
 		:Setup(Setup), RemoteStartFrameIndex(Setup.LocalStartFrameIndex + Setup.RemoteStartOffsetInFrames)
 	{}
 
-	virtual void OnPreUpdate(const uint16_t TestFrameIndex, const TEST_CPT_State OtherPlayerState) = 0;
+	virtual void OnPreUpdate(const uint16_t TestFrameIndex, const TEST_CPT_State OtherPlayerInitialStateToTransfer) = 0;
 
 	virtual uint8_t SystemIndex() const = 0;
 
@@ -142,17 +177,26 @@ protected:
 public:
 	virtual ~TEST_ABS_SystemMock() = default;
 
-	bool IsRunning() const
+	inline TEST_CPT_State InitialStateToTransfer() const
+	{
+		return InitialStateToTransferInternal;
+	}
+
+	inline bool IsRunning() const
 	{
 		return Player().Emulator().ExistsAtFrame(GGNoRe::API::SystemMultiton::GetRollbackable(SystemIndex()).UnsimulatedFrameIndex());
 	}
 
-	// The state of the other player is needed to properly initialize
-	void PreUpdate(const uint16_t TestFrameIndex, const TEST_CPT_State OtherPlayerState)
+	inline void SaveCurrentStateToTransfer()
+	{
+		InitialStateToTransferInternal = Player().State();
+	}
+
+	void PreUpdate(const uint16_t TestFrameIndex, const TEST_CPT_State OtherPlayerInitialStateToTransfer)
 	{
 		try
 		{
-			OnPreUpdate(TestFrameIndex, OtherPlayerState);
+			OnPreUpdate(TestFrameIndex, OtherPlayerInitialStateToTransfer);
 		}
 		catch (const GGNoRe::API::I_RB_Rollbackable::RegisterSuccess_E& Success)
 		{

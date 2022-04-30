@@ -122,13 +122,6 @@ struct TEST_CPT_State
 	uint8_t InputsAccumulator = 0; // To check that the de/serialization are consistent with OnSimulateFrame
 	float DeltaDurationAccumulatorInSeconds = 0.f; // To check that the de/serialization are consistent with OnSimulateTick
 
-	void Reset()
-	{
-		NonZero = 1;
-		InputsAccumulator = 0;
-		DeltaDurationAccumulatorInSeconds = 0.f;
-	}
-
 	void LogHumanReadable(const std::string& Message) const
 	{
 		TestLog(Message + " " + std::to_string(NonZero) + " " + std::to_string(InputsAccumulator) + " " + std::to_string(DeltaDurationAccumulatorInSeconds));
@@ -155,21 +148,18 @@ protected:
 		}
 	}
 
-	void OnActivationChange(const ActivationChangeEvent ActivationChange) override {}
+	void OnActivationChange(const ActivationChangeEvent ActivationChange) override
+	{
+		if (ActivationChange.Type == ActivationChangeEvent::ChangeType_E::Activate)
+		{
+			// In order to make sure that the content is what is expected when activating
+			PlayerState.LogHumanReadable("{TEST SAVE STATES ACTIVATE}");
+		}
+	}
 
 	void OnActivationChangeStartingFrame(const ActivationChangeEvent ActivationChange, const float PreActivationConsumedDeltaDurationInSeconds) override {}
 
-	void OnRollActivationChangeBack(const ActivationChangeEvent ActivationChange) override
-	{
-		// If the activation change that is roll backed was an activation
-		if (ActivationChange.Type == ActivationChangeEvent::ChangeType_E::Activate)
-		{
-			// When rollbacking, the order of the callbacks is: OnRollActivationChangeBack -> OnSerialize -> OnActivationChange
-			// So resetting is needed for an accurate serialization
-			PlayerState.Reset();
-			PlayerState.LogHumanReadable("{TEST SAVE STATES ROLL ACTIVATION BACK}");
-		}
-	}
+	void OnRollActivationChangeBack(const ActivationChangeEvent ActivationChange) override {}
 
 	void OnStarvedForInputFrame(const uint16_t FrameIndex) override {}
 	void OnStallAdvantageFrame(const uint16_t FrameIndex) override {}

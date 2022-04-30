@@ -22,7 +22,7 @@ class TEST_LocalMock final : public TEST_ABS_SystemMock
 	TEST_Player TrueLocalPlayer1;
 	TEST_Player LocalPlayer2;
 
-	void OnPreUpdate(const uint16_t, const TEST_CPT_State OtherPlayerState) override
+	void OnPreUpdate(const uint16_t, const TEST_CPT_State OtherPlayerInitialStateToTransfer) override
 	{
 		const auto FrameIndex = SystemMultiton::GetRollbackable(TrueLocalPlayer1Identity.SystemIndex).UnsimulatedFrameIndex();
 
@@ -30,11 +30,11 @@ class TEST_LocalMock final : public TEST_ABS_SystemMock
 		{
 			if (Setup.InitialLatencyInFrames == 0 && !LocalPlayer2.Emulator().ExistsAtFrame(FrameIndex))
 			{
-				LocalPlayer2.ActivateNow(LocalPlayer2Identity);
+				LocalPlayer2.ActivateNow(LocalPlayer2Identity, OtherPlayerInitialStateToTransfer);
 			}
 			else if (!LocalPlayer2.Emulator().ExistsAtFrame(RemoteStartFrameIndex))
 			{
-				LocalPlayer2.ActivateInPast(LocalPlayer2Identity, RemoteStartFrameIndex);
+				LocalPlayer2.ActivateInPast(LocalPlayer2Identity, RemoteStartFrameIndex, OtherPlayerInitialStateToTransfer);
 			}
 		}
 	}
@@ -81,7 +81,7 @@ class TEST_RemoteMock final : public TEST_ABS_SystemMock
 	TEST_Player TrueRemotePlayer2;
 	TEST_Player RemotePlayer1;
 
-	void OnPreUpdate(const uint16_t TestFrameIndex, const TEST_CPT_State OtherPlayerState) override
+	void OnPreUpdate(const uint16_t TestFrameIndex, const TEST_CPT_State OtherPlayerInitialStateToTransfer) override
 	{
 		if (TestFrameIndex == RemoteStartFrameIndex && !TrueRemotePlayer2.Emulator().ExistsAtFrame(TestFrameIndex))
 		{
@@ -98,11 +98,11 @@ class TEST_RemoteMock final : public TEST_ABS_SystemMock
 		{
 			if (Setup.InitialLatencyInFrames == 0 && !RemotePlayer1.Emulator().ExistsAtFrame(FrameIndex))
 			{
-				RemotePlayer1.ActivateNow(RemotePlayer1Identity);
+				RemotePlayer1.ActivateNow(RemotePlayer1Identity, OtherPlayerInitialStateToTransfer);
 			}
 			else if (!RemotePlayer1.Emulator().ExistsAtFrame(RemoteStartFrameIndex))
 			{
-				RemotePlayer1.ActivateInPast(RemotePlayer1Identity, RemoteStartFrameIndex);
+				RemotePlayer1.ActivateInPast(RemotePlayer1Identity, RemoteStartFrameIndex, OtherPlayerInitialStateToTransfer);
 			}
 		}
 	}
@@ -174,8 +174,14 @@ bool Test1Local2RemoteMockRollback(const DATA_CFG Config, const TestEnvironment 
 	{
 		assert(Local.IsRunning());
 
-		Local.PreUpdate((uint16_t)IterationIndex + Setup.LocalStartFrameIndex, Remote.Player().State());
-		Remote.PreUpdate((uint16_t)IterationIndex + Setup.LocalStartFrameIndex, Local.Player().State());
+		if (IterationIndex == Setup.RemoteStartOffsetInFrames)
+		{
+			Local.SaveCurrentStateToTransfer();
+			Remote.SaveCurrentStateToTransfer();
+		}
+
+		Local.PreUpdate((uint16_t)IterationIndex + Setup.LocalStartFrameIndex, Remote.InitialStateToTransfer());
+		Remote.PreUpdate((uint16_t)IterationIndex + Setup.LocalStartFrameIndex, Local.InitialStateToTransfer());
 
 		Local.Update
 		({
