@@ -62,7 +62,7 @@ public:
 protected:
 	void OnRegisterActivationChange(const RegisterActivationChangeEvent RegisteredActivationChange, const ActivationChangeEvent ActivationChange) override
 	{
-		if (RegisteredActivationChange.Success == I_RB_Rollbackable::RegisterSuccess_E::Registered || RegisteredActivationChange.Success == I_RB_Rollbackable::RegisterSuccess_E::PreStart)
+		if (RegisteredActivationChange.Success == I_RB_Rollbackable::RegisterSuccess_E::Registered)
 		{
 			// Both OnRegisterActivationChange and ShouldSendInputsToTarget happen outside of the simulation so they can be properly ordered so that the owner is valid
 			// The change of owner happens here and not inside OnActivationChange because the transfer of inputs should happen under the real most recent ownership as opposed to the simulated one
@@ -131,6 +131,8 @@ struct TEST_CPT_State
 class TEST_CPT_RB_SaveStates final : public GGNoRe::API::ABS_CPT_RB_SaveStates
 {
 	TEST_CPT_State& PlayerState;
+	// The id is stored here for logging purposes, unnecessary during real use
+	GGNoRe::API::id_t PlayerId = 0;
 
 public:
 	TEST_CPT_RB_SaveStates(TEST_CPT_State& PlayerState)
@@ -142,7 +144,7 @@ public:
 protected:
 	void OnRegisterActivationChange(const RegisterActivationChangeEvent RegisteredActivationChange, const ActivationChangeEvent ActivationChange) override
 	{
-		if (RegisteredActivationChange.Success != I_RB_Rollbackable::RegisterSuccess_E::Registered && RegisteredActivationChange.Success != I_RB_Rollbackable::RegisterSuccess_E::PreStart)
+		if (RegisteredActivationChange.Success != I_RB_Rollbackable::RegisterSuccess_E::Registered)
 		{
 			throw RegisteredActivationChange.Success;
 		}
@@ -153,8 +155,10 @@ protected:
 		if (ActivationChange.Type == ActivationChangeEvent::ChangeType_E::Activate)
 		{
 			// In order to make sure that the content is what is expected when activating
-			PlayerState.LogHumanReadable("{TEST SAVE STATES ACTIVATE}");
+			PlayerState.LogHumanReadable("{TEST SAVE STATES ACTIVATE - PLAYER " + std::to_string(ActivationChange.Owner.Id) + "}");
 		}
+
+		PlayerId = ActivationChange.Owner.Id;
 	}
 
 	void OnActivationChangeStartingFrame(const ActivationChangeEvent ActivationChange, const float PreActivationConsumedDeltaDurationInSeconds) override {}
@@ -178,7 +182,7 @@ protected:
 
 		std::memcpy(TargetBufferOut.data() + CopyOffset, &PlayerState.DeltaDurationAccumulatorInSeconds, sizeof(PlayerState.DeltaDurationAccumulatorInSeconds));
 
-		PlayerState.LogHumanReadable("{TEST SAVE STATES SERIALIZE}");
+		PlayerState.LogHumanReadable("{TEST SAVE STATES SERIALIZE - PLAYER " + std::to_string(PlayerId) + "}");
 	}
 
 	void OnDeserialize(const std::vector<uint8_t>& SourceBuffer) override
@@ -193,11 +197,11 @@ protected:
 
 			std::memcpy(&PlayerState.DeltaDurationAccumulatorInSeconds, SourceBuffer.data() + ReadOffset, sizeof(PlayerState.DeltaDurationAccumulatorInSeconds));
 
-			PlayerState.LogHumanReadable("{TEST SAVE STATES DESERIALIZE SUCCESS}");
+			PlayerState.LogHumanReadable("{TEST SAVE STATES DESERIALIZE SUCCESS - PLAYER " + std::to_string(PlayerId) + "}");
 		}
 		else
 		{
-			PlayerState.LogHumanReadable("{TEST SAVE STATES DESERIALIZE FAILURE}");
+			PlayerState.LogHumanReadable("{TEST SAVE STATES DESERIALIZE FAILURE - PLAYER " + std::to_string(PlayerId) + "}");
 		}
 	}
 
@@ -218,7 +222,7 @@ public:
 protected:
 	void OnRegisterActivationChange(const RegisterActivationChangeEvent RegisteredActivationChange, const ActivationChangeEvent ActivationChange) override
 	{
-		if (RegisteredActivationChange.Success != I_RB_Rollbackable::RegisterSuccess_E::Registered && RegisteredActivationChange.Success != I_RB_Rollbackable::RegisterSuccess_E::PreStart)
+		if (RegisteredActivationChange.Success != I_RB_Rollbackable::RegisterSuccess_E::Registered)
 		{
 			throw RegisteredActivationChange.Success;
 		}

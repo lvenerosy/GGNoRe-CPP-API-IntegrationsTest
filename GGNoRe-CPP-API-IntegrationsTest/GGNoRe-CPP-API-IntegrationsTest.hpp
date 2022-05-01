@@ -58,6 +58,8 @@ int main()
 	TestEnvironment Environment;
 	PlayersSetup Setup;
 
+	GGNoRe::API::ABS_DBG_HumanReadable::LoggingLevel = GGNoRe::API::ABS_DBG_HumanReadable::LoggingLevel_E::Lean;
+
 	struct TestProgress
 	{
 		size_t CurrentTestCounter = 0;

@@ -200,11 +200,11 @@ bool Test1Local2RemoteMockRollback(const DATA_CFG Config, const TestEnvironment 
 				AllowRemoteStarvedForInput,
 				Setup.RemoteMockHardwareFrameDurationInSeconds < Config.SimulationConfiguration.FrameDurationInSeconds
 			});
+		}
 
-			if (IterationIndex % Environment.ReceiveRemoteIntervalInFrames == 0)
-			{
-				TEST_NSPC_Systems::TransferLocalPlayersInputs();
-			}
+		if (IterationIndex % Environment.ReceiveRemoteIntervalInFrames == 0)
+		{
+			TEST_NSPC_Systems::TransferLocalPlayersInputs();
 		}
 	}
 
