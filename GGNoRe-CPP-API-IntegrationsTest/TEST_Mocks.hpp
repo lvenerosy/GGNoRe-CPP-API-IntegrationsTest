@@ -117,17 +117,17 @@ std::set<uint8_t> SystemIndexes;
 
 void TransferLocalPlayersInputs()
 {
-	for (auto SystemIndex : SystemIndexes)
+	for (auto CurrentSystemIndex : SystemIndexes)
 	{
-		auto CurrentFrameIndex = GGNoRe::API::SystemMultiton::GetRollbackable(SystemIndex).UnsimulatedFrameIndex();
+		auto LocalFrameIndex = GGNoRe::API::SystemMultiton::GetRollbackable(CurrentSystemIndex).UnsimulatedFrameIndex();
 
 		const auto& Players = TEST_Player::Players();
 		for (auto Player : Players)
 		{
-			if (Player->Emulator().ShouldSendInputsToTarget(SystemIndex))
+			if (Player->Emulator().ShouldSendInputsToTarget(CurrentSystemIndex))
 			{
-				TestLog("############ INPUT TRANSFER FROM PLAYER " + std::to_string(Player->Emulator().Owner().Id) + " TO SYSTEM " + std::to_string(SystemIndex) + " - FRAME " + std::to_string(CurrentFrameIndex) + " ############");
-				assert(GGNoRe::API::SystemMultiton::GetEmulator(SystemIndex).DownloadRemotePlayerBinary(Player->Emulator().LatestInputs().data()) == GGNoRe::API::ABS_CPT_IPT_Emulator::SINGLETON::DownloadSuccess_E::Success);
+				TestLog("############ INPUT TRANSFER FROM PLAYER " + std::to_string(Player->Emulator().Owner().Id) + " TO SYSTEM " + std::to_string(CurrentSystemIndex) + " - FRAME " + std::to_string(LocalFrameIndex) + " ############");
+				assert(GGNoRe::API::SystemMultiton::GetEmulator(CurrentSystemIndex).DownloadRemotePlayerBinary(Player->Emulator().LatestInputs().data()) == GGNoRe::API::ABS_CPT_IPT_Emulator::SINGLETON::DownloadSuccess_E::Success);
 			}
 		}
 	}
@@ -145,12 +145,6 @@ void ForceResetAndCleanup()
 
 class TEST_ABS_SystemMock
 {
-	size_t MockTickIndex = 0;
-	float UpdateTimer = 0.f;
-	// The state of the other player is needed to properly initialize
-	// This is a shortcut, in a real setup you would want to receive from the remote player/server what you need to initialize
-	TEST_CPT_State InitialStateToTransferInternal;
-
 public:
 	struct OutcomesSanityCheck
 	{
@@ -160,6 +154,15 @@ public:
 		const bool AllowStayCurrent = false;
 	};
 
+private:
+	size_t MockTickIndex = 0;
+	float UpdateTimer = 0.f;
+
+	// The state and inputs of the other player are needed to properly initialize
+	// This is a shortcut, in a real setup you would want to receive from the remote player/server what you need to initialize
+	TEST_CPT_State InitialStateToTransferInternal;
+	GGNoRe::API::ABS_CPT_IPT_Emulator::SINGLETON::InputsBinaryPacketsForStartingRemote InitialInputsToTransferInternal;
+
 protected:
 	const PlayersSetup Setup;
 	const uint16_t RemoteStartFrameIndex = 0;
@@ -168,7 +171,9 @@ protected:
 		:Setup(Setup), RemoteStartFrameIndex(Setup.LocalStartFrameIndex + Setup.RemoteStartOffsetInFrames)
 	{}
 
-	virtual void OnPreUpdate(const uint16_t TestFrameIndex, const TEST_CPT_State OtherPlayerInitialStateToTransfer) = 0;
+	virtual void OnPreUpdate(const uint16_t TestFrameIndex, const TEST_CPT_State OtherPlayerInitialState) = 0;
+
+	virtual void OnPostUpdate(const uint16_t TestFrameIndex, const GGNoRe::API::ABS_CPT_IPT_Emulator::SINGLETON::InputsBinaryPacketsForStartingRemote OtherPlayerInitialInputs) = 0;
 
 	virtual uint8_t SystemIndex() const = 0;
 
@@ -182,21 +187,26 @@ public:
 		return InitialStateToTransferInternal;
 	}
 
+	inline GGNoRe::API::ABS_CPT_IPT_Emulator::SINGLETON::InputsBinaryPacketsForStartingRemote InitialInputsToTransfer() const
+	{
+		return InitialInputsToTransferInternal;
+	}
+
 	inline bool IsRunning() const
 	{
 		return Player().Emulator().ExistsAtFrame(GGNoRe::API::SystemMultiton::GetRollbackable(SystemIndex()).UnsimulatedFrameIndex());
 	}
 
-	inline void SaveCurrentStateToTransfer()
+	inline void SaveInitialStateToTransfer() noexcept
 	{
 		InitialStateToTransferInternal = Player().State();
 	}
 
-	void PreUpdate(const uint16_t TestFrameIndex, const TEST_CPT_State OtherPlayerInitialStateToTransfer)
+	void PreUpdate(const uint16_t TestFrameIndex, const TEST_CPT_State OtherPlayerInitialState)
 	{
 		try
 		{
-			OnPreUpdate(TestFrameIndex, OtherPlayerInitialStateToTransfer);
+			OnPreUpdate(TestFrameIndex, OtherPlayerInitialState);
 		}
 		catch (const GGNoRe::API::I_RB_Rollbackable::RegisterSuccess_E& Success)
 		{
@@ -260,6 +270,19 @@ public:
 				ReadyForNextFrame = true;
 			}
 		}
+
+		// + 1 because should happen post TryTickingToNextFrame
+		if (GGNoRe::API::SystemMultiton::GetRollbackable(SystemIndex()).UnsimulatedFrameIndex() == RemoteStartFrameIndex + 1)
+		{
+			assert(IsRunning());
+			InitialInputsToTransferInternal = GGNoRe::API::SystemMultiton::GetEmulator(SystemIndex()).UploadInputsFromRemoteStartFrameIndex(RemoteStartFrameIndex);
+			assert(InitialInputsToTransferInternal.UploadSuccess == GGNoRe::API::ABS_CPT_IPT_Emulator::SINGLETON::InputsBinaryPacketsForStartingRemote::UploadSuccess_E::Success);
+		}
+	}
+
+	void PostUpdate(const uint16_t TestFrameIndex, const GGNoRe::API::ABS_CPT_IPT_Emulator::SINGLETON::InputsBinaryPacketsForStartingRemote OtherPlayerInitialInputs)
+	{
+		OnPostUpdate(TestFrameIndex, OtherPlayerInitialInputs);
 	}
 
 	virtual const TEST_Player& Player() const = 0;

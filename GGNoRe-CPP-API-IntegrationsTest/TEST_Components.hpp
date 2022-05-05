@@ -54,7 +54,7 @@ public:
 
 	inline bool ShouldSendInputsToTarget(const uint8_t TargetSystemIndex) const
 	{
-		return CurrentOwnership.Owner.SystemIndex != TargetSystemIndex && CurrentOwnership.Owner.Local && !Inputs.empty();
+		return CurrentOwnership.Owner.SystemIndex != TargetSystemIndex && CurrentOwnership.Owner.Local;
 	}
 
 	~TEST_CPT_IPT_Emulator() = default;
@@ -104,7 +104,7 @@ protected:
 		return LocalMockInputs;
 	}
 
-	void OnReadyToSendInputs(const std::vector<uint8_t>& BinaryPacket) override
+	void OnReadyToUploadInputs(const std::vector<uint8_t>& BinaryPacket) override
 	{
 		Inputs = BinaryPacket;
 	}
@@ -152,12 +152,6 @@ protected:
 
 	void OnActivationChange(const ActivationChangeEvent ActivationChange) override
 	{
-		if (ActivationChange.Type == ActivationChangeEvent::ChangeType_E::Activate)
-		{
-			// In order to make sure that the content is what is expected when activating
-			PlayerState.LogHumanReadable("{TEST SAVE STATES ACTIVATE - PLAYER " + std::to_string(ActivationChange.Owner.Id) + "}");
-		}
-
 		PlayerId = ActivationChange.Owner.Id;
 	}
 
@@ -187,22 +181,17 @@ protected:
 
 	void OnDeserialize(const std::vector<uint8_t>& SourceBuffer) override
 	{
-		if (!SourceBuffer.empty())
-		{
-			std::memcpy(&PlayerState.NonZero, SourceBuffer.data(), sizeof(PlayerState.NonZero));
-			size_t ReadOffset = sizeof(PlayerState.NonZero);
+		assert(!SourceBuffer.empty());
 
-			std::memcpy(&PlayerState.InputsAccumulator, SourceBuffer.data() + ReadOffset, sizeof(PlayerState.InputsAccumulator));
-			ReadOffset += sizeof(PlayerState.InputsAccumulator);
+		std::memcpy(&PlayerState.NonZero, SourceBuffer.data(), sizeof(PlayerState.NonZero));
+		size_t ReadOffset = sizeof(PlayerState.NonZero);
 
-			std::memcpy(&PlayerState.DeltaDurationAccumulatorInSeconds, SourceBuffer.data() + ReadOffset, sizeof(PlayerState.DeltaDurationAccumulatorInSeconds));
+		std::memcpy(&PlayerState.InputsAccumulator, SourceBuffer.data() + ReadOffset, sizeof(PlayerState.InputsAccumulator));
+		ReadOffset += sizeof(PlayerState.InputsAccumulator);
 
-			PlayerState.LogHumanReadable("{TEST SAVE STATES DESERIALIZE SUCCESS - PLAYER " + std::to_string(PlayerId) + "}");
-		}
-		else
-		{
-			PlayerState.LogHumanReadable("{TEST SAVE STATES DESERIALIZE FAILURE - PLAYER " + std::to_string(PlayerId) + "}");
-		}
+		std::memcpy(&PlayerState.DeltaDurationAccumulatorInSeconds, SourceBuffer.data() + ReadOffset, sizeof(PlayerState.DeltaDurationAccumulatorInSeconds));
+
+		PlayerState.LogHumanReadable("{TEST SAVE STATES DESERIALIZE - PLAYER " + std::to_string(PlayerId) + "}");
 	}
 
 	void ResetAndCleanup() noexcept override {}
@@ -241,6 +230,7 @@ protected:
 			PlayerState.InputsAccumulator += Input;
 		}
 	}
+
 	void OnSimulateTick(const float DeltaDurationInSeconds) override
 	{
 		PlayerState.DeltaDurationAccumulatorInSeconds += DeltaDurationInSeconds;

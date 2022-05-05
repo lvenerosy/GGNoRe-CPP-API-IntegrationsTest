@@ -34,7 +34,7 @@ struct RangeFunctorChain
 	std::function<void()> RangeFunctor;
 };
 
-template<typename T, std::size_t N> RangeFunctorChain GetRangeFunctor(const std::array<T, N> ValueRange, T& Value, const RangeFunctorChain ChainedRangeFunctor)
+template<typename T, std::size_t N> RangeFunctorChain GetRangeFunctor(const std::array<T, N> ValueRange, T& Value, const RangeFunctorChain ChainedRangeFunctor) noexcept
 {
 	return
 	{
