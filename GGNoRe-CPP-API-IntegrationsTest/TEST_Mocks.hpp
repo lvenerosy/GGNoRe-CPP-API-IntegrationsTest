@@ -135,10 +135,7 @@ void TransferLocalPlayersInputs()
 
 void ForceResetAndCleanup()
 {
-	for (auto SystemIndex : SystemIndexes)
-	{
-		GGNoRe::API::SystemMultiton::GetRollbackable(SystemIndex).ForceResetAndCleanup();
-	}
+	GGNoRe::API::SystemMultiton::ForceResetAndCleanup();
 
 	SystemIndexes.clear();
 }

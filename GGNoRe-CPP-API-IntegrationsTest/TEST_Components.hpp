@@ -11,7 +11,7 @@
 #include <cassert>
 #include <cstdlib>
 #include <cstring>
-#if GGNORECPPAPI_LOG
+#ifdef GGNORECPPAPI_LOG
 #include <iostream>
 #endif
 #include <set>
@@ -19,7 +19,7 @@
 
 inline void TestLog(const std::string& Message)
 {
-#if GGNORECPPAPI_LOG
+#ifdef GGNORECPPAPI_LOG
 	std::cout << Message << "\n" << std::endl;
 #endif
 }
