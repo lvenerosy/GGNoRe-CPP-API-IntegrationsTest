@@ -58,12 +58,12 @@ int main()
 	TestEnvironment Environment;
 	PlayersSetup Setup;
 
-	GGNoRe::API::ABS_DBG_HumanReadable::LoggingLevel = GGNoRe::API::ABS_DBG_HumanReadable::LoggingLevel_E::Verbose;
+	GGNoRe::API::ABS_DBG_HumanReadable::LoggingLevel = GGNoRe::API::ABS_DBG_HumanReadable::LoggingLevel_E::Lean;
 
 	struct TestProgress
 	{
 		size_t CurrentTestCounter = 0;
-		const size_t StartTestIndex = 7762; // Run the sln in development mode for optimal speed while keeping asserts, then if an assert is hit start from the failing test and run in debug mode
+		const size_t StartTestIndex = 1; // Run the sln in development mode for optimal speed while keeping asserts, then if an assert is hit start from the failing test and run in debug mode
 	};
 	TestProgress Progress;
 	RangeFunctorChain Tests;
@@ -87,9 +87,9 @@ int main()
 	Tests = GetRangeFunctor(std::array<bool, 1>{ false }, Config.RollbackConfiguration.ForceMaximumRollback, Tests);
 
 	// 144hz, 60hz, 45hz, 30hz
-	Tests = GetRangeFunctor(std::array<float, 4>{ 0.006944f, 0.016667f, 0.022222f, 0.033333f }, Config.SimulationConfiguration.FrameDurationInSeconds, Tests);
-	Tests = GetRangeFunctor(std::array<float, 2>{ 0.f, 60.f * 0.016667f }, Config.SimulationConfiguration.StallTimerDurationInSeconds, Tests);
-	Tests = GetRangeFunctor(std::array<float, 2>{ 0.f, 60.f * 0.016667f }, Config.SimulationConfiguration.DoubleSimulationTimerDurationInSeconds, Tests);
+	Tests = GetRangeFunctor(std::array<GGNoRe::API::SER_FixedPoint, 4>{ 0.006944f, 0.016667f, 0.022222f, 0.033333f }, Config.SimulationConfiguration.FrameDurationInSeconds, Tests);
+	Tests = GetRangeFunctor(std::array<GGNoRe::API::SER_FixedPoint, 2>{ 0.f, 60.f * 0.016667f }, Config.SimulationConfiguration.StallTimerDurationInSeconds, Tests);
+	Tests = GetRangeFunctor(std::array<GGNoRe::API::SER_FixedPoint, 2>{ 0.f, 60.f * 0.016667f }, Config.SimulationConfiguration.DoubleSimulationTimerDurationInSeconds, Tests);
 
 	Tests = GetRangeFunctor(std::array<uint16_t, 3>{ 1, 2, 5 }, Environment.ReceiveRemoteIntervalInFrames, Tests);
 
@@ -97,10 +97,10 @@ int main()
 	Tests = GetRangeFunctor(std::array<uint16_t, 3>{ 0, 1, 10 }, Setup.LocalStartFrameIndex, Tests);
 	Tests = GetRangeFunctor(std::array<uint16_t, 3>{ 0, 2, 5 }, Setup.RemoteStartOffsetInFrames, Tests);
 	Tests = GetRangeFunctor(std::array<uint16_t, 3>{ 0, 2, 5 }, Setup.InitialLatencyInFrames, Tests);
-	// 120fps, 60fps, 40fps, 16fps
-	Tests = GetRangeFunctor(std::array<float, 4>{ 0.008333f, 0.016667f, 0.025f, 0.0625f }, Setup.LocalMockHardwareFrameDurationInSeconds, Tests);
 	// 90fps, 60fps, 30fps
-	Tests = GetRangeFunctor(std::array<float, 3>{ 0.011111f, 0.016667f, 0.033333f }, Setup.RemoteMockHardwareFrameDurationInSeconds, Tests);
+	Tests = GetRangeFunctor(std::array<float, 3>{ 0.011111f, 0.016667f, 0.033333f }, Setup.LocalMockHardwareFrameDurationInSeconds, Tests);
+	// 120fps, 60fps, 40fps, 16fps
+	Tests = GetRangeFunctor(std::array<float, 4>{ 0.008333f, 0.016667f, 0.025f, 0.0625f }, Setup.RemoteMockHardwareFrameDurationInSeconds, Tests);
 
 	srand(0);
 	Tests.RangeFunctor();

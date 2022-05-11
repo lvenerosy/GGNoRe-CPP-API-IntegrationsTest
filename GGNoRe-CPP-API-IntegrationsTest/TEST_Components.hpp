@@ -85,7 +85,7 @@ protected:
 		}
 	}
 
-	void OnActivationChangeStartingFrame(const ActivationChangeEvent ActivationChange, const float PreActivationConsumedDeltaDurationInSeconds) override {}
+	void OnActivationChangeStartingFrame(const ActivationChangeEvent ActivationChange, const GGNoRe::API::SER_FixedPoint PreActivationConsumedDeltaDurationInSeconds) override {}
 
 	void OnRollActivationChangeBack(const ActivationChangeEvent ActivationChange) override {}
 
@@ -120,7 +120,9 @@ struct TEST_CPT_State
 {
 	uint16_t NonZero = 1; // Necessary otherwise the other fields initialized to 0 generate a checksum with a value of 0 which is considered as being a missing checksum
 	uint8_t InputsAccumulator = 0; // To check that the de/serialization are consistent with OnSimulateFrame
-	float DeltaDurationAccumulatorInSeconds = 0.f; // To check that the de/serialization are consistent with OnSimulateTick
+	// The accumulator uses fixed point instead of regular floats because addition introduces error
+	// In user code you can use the conversion back to float as long as you don't modify the value you get, or if you modify it, the particular piece of state it affects should not be part of the serialization (sound/particle playback possibly)
+	GGNoRe::API::SER_FixedPoint DeltaDurationAccumulatorInSeconds = 0.f; // To check that the de/serialization are consistent with OnSimulateTick
 
 	void LogHumanReadable(const std::string& Message) const
 	{
@@ -155,7 +157,7 @@ protected:
 		PlayerId = ActivationChange.Owner.Id;
 	}
 
-	void OnActivationChangeStartingFrame(const ActivationChangeEvent ActivationChange, const float PreActivationConsumedDeltaDurationInSeconds) override {}
+	void OnActivationChangeStartingFrame(const ActivationChangeEvent ActivationChange, const GGNoRe::API::SER_FixedPoint PreActivationConsumedDeltaDurationInSeconds) override {}
 
 	void OnRollActivationChangeBack(const ActivationChangeEvent ActivationChange) override {}
 
@@ -219,7 +221,7 @@ protected:
 
 	void OnActivationChange(const ActivationChangeEvent ActivationChange) override {}
 
-	void OnActivationChangeStartingFrame(const ActivationChangeEvent ActivationChange, const float PreActivationConsumedDeltaDurationInSeconds) override {}
+	void OnActivationChangeStartingFrame(const ActivationChangeEvent ActivationChange, const GGNoRe::API::SER_FixedPoint PreActivationConsumedDeltaDurationInSeconds) override {}
 
 	void OnRollActivationChangeBack(const ActivationChangeEvent ActivationChange) override {}
 
@@ -231,7 +233,7 @@ protected:
 		}
 	}
 
-	void OnSimulateTick(const float DeltaDurationInSeconds) override
+	void OnSimulateTick(const GGNoRe::API::SER_FixedPoint DeltaDurationInSeconds) override
 	{
 		PlayerState.DeltaDurationAccumulatorInSeconds += DeltaDurationInSeconds;
 	}

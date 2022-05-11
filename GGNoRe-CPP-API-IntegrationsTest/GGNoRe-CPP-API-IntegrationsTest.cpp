@@ -12,53 +12,12 @@ namespace TEST_NSPC_Systems
 {
 
 const id_t Player1Id = 0;
+const uint8_t Player1SystemIndex = 0;
 const id_t Player2Id = 1;
+const uint8_t Player2SystemIndex = 1;
 
 class TEST_LocalMock final : public TEST_ABS_SystemMock
 {
-	const DATA_Player TrueLocalPlayer1Identity;
-	const DATA_Player LocalPlayer2Identity;
-
-	TEST_Player TrueLocalPlayer1;
-	TEST_Player LocalPlayer2;
-
-	void OnPreUpdate(const uint16_t, const TEST_CPT_State OtherPlayerInitialState) override
-	{
-		const auto FrameIndex = SystemMultiton::GetRollbackable(SystemIndex()).UnsimulatedFrameIndex();
-
-		if (FrameIndex == RemoteStartFrameIndex + Setup.InitialLatencyInFrames)
-		{
-			if (Setup.InitialLatencyInFrames == 0 && !LocalPlayer2.Emulator().ExistsAtFrame(FrameIndex))
-			{
-				LocalPlayer2.ActivateNow(LocalPlayer2Identity, OtherPlayerInitialState);
-			}
-			else if (!LocalPlayer2.Emulator().ExistsAtFrame(RemoteStartFrameIndex))
-			{
-				LocalPlayer2.ActivateInPast(LocalPlayer2Identity, RemoteStartFrameIndex, OtherPlayerInitialState);
-			}
-		}
-	}
-
-	void OnPostUpdate(const uint16_t TestFrameIndex, const GGNoRe::API::ABS_CPT_IPT_Emulator::SINGLETON::InputsBinaryPacketsForStartingRemote OtherPlayerInitialInputs) override
-	{
-		const auto FrameIndex = SystemMultiton::GetRollbackable(SystemIndex()).UnsimulatedFrameIndex();
-		// + 1 because should happen post TryTickingToNextFrame
-		if (FrameIndex == RemoteStartFrameIndex + Setup.InitialLatencyInFrames + 1)
-		{
-			assert(OtherPlayerInitialInputs.UploadSuccess == GGNoRe::API::ABS_CPT_IPT_Emulator::SINGLETON::InputsBinaryPacketsForStartingRemote::UploadSuccess_E::Success);
-
-			for (const auto& RemotePlayerBinary : OtherPlayerInitialInputs.InputsBinaryPackets)
-			{
-				assert(GGNoRe::API::SystemMultiton::GetEmulator(SystemIndex()).DownloadRemotePlayerBinary(RemotePlayerBinary.data()) == GGNoRe::API::ABS_CPT_IPT_Emulator::SINGLETON::DownloadSuccess_E::Success);
-			}
-		}
-	}
-
-	uint8_t SystemIndex() const override
-	{
-		return 0;
-	}
-
 	float DeltaDurationInSeconds() const override
 	{
 		return Setup.LocalMockHardwareFrameDurationInSeconds;
@@ -67,81 +26,14 @@ class TEST_LocalMock final : public TEST_ABS_SystemMock
 public:
 	TEST_LocalMock(const PlayersSetup Setup)
 		:
-		TEST_ABS_SystemMock(Setup),
-		TrueLocalPlayer1Identity({ Player1Id, true, Setup.LocalStartFrameIndex, SystemIndex() }),
-		LocalPlayer2Identity({ Player2Id, false, RemoteStartFrameIndex, SystemIndex() }),
-		TrueLocalPlayer1(Setup.UseRandomInputs),
-		LocalPlayer2(Setup.UseRandomInputs)
+		TEST_ABS_SystemMock(DATA_Player{ Player1Id, true, Setup.LocalStartFrameIndex, Player1SystemIndex }, DATA_Player{ Player2Id, false, uint16_t(Setup.LocalStartFrameIndex + Setup.RemoteStartOffsetInFrames), Player1SystemIndex }, Setup)
 	{
 		assert(Player1Id != Player2Id);
-		assert(SystemIndexes.find(SystemIndex()) == SystemIndexes.cend());
-
-		SystemMultiton::GetRollbackable(SystemIndex()).SyncWithRemoteFrameIndex(Setup.LocalStartFrameIndex);
-		SystemIndexes.insert(SystemIndex());
-
-		TrueLocalPlayer1.ActivateNow(TrueLocalPlayer1Identity);
-	}
-
-	const TEST_Player& Player() const override
-	{
-		return TrueLocalPlayer1;
 	}
 };
 
 class TEST_RemoteMock final : public TEST_ABS_SystemMock
 {
-	const DATA_Player TrueRemotePlayer2Identity;
-	const DATA_Player RemotePlayer1Identity;
-
-	TEST_Player TrueRemotePlayer2;
-	TEST_Player RemotePlayer1;
-
-	void OnPreUpdate(const uint16_t TestFrameIndex, const TEST_CPT_State OtherPlayerInitialState) override
-	{
-		if (TestFrameIndex == RemoteStartFrameIndex && !TrueRemotePlayer2.Emulator().ExistsAtFrame(TestFrameIndex))
-		{
-			assert(SystemIndexes.find(SystemIndex()) == SystemIndexes.cend());
-
-			SystemMultiton::GetRollbackable(SystemIndex()).SyncWithRemoteFrameIndex(RemoteStartFrameIndex);
-			SystemIndexes.insert(SystemIndex());
-
-			TrueRemotePlayer2.ActivateNow(TrueRemotePlayer2Identity);
-		}
-
-		const auto FrameIndex = SystemMultiton::GetRollbackable(SystemIndex()).UnsimulatedFrameIndex();
-		if (FrameIndex == RemoteStartFrameIndex + Setup.InitialLatencyInFrames)
-		{
-			if (Setup.InitialLatencyInFrames == 0 && !RemotePlayer1.Emulator().ExistsAtFrame(FrameIndex))
-			{
-				RemotePlayer1.ActivateNow(RemotePlayer1Identity, OtherPlayerInitialState);
-			}
-			else if (!RemotePlayer1.Emulator().ExistsAtFrame(RemoteStartFrameIndex))
-			{
-				RemotePlayer1.ActivateInPast(RemotePlayer1Identity, RemoteStartFrameIndex, OtherPlayerInitialState);
-			}
-		}
-	}
-
-	void OnPostUpdate(const uint16_t TestFrameIndex, const GGNoRe::API::ABS_CPT_IPT_Emulator::SINGLETON::InputsBinaryPacketsForStartingRemote OtherPlayerInitialInputs) override
-	{
-		const auto FrameIndex = SystemMultiton::GetRollbackable(SystemIndex()).UnsimulatedFrameIndex();
-		// + 1 because should happen post TryTickingToNextFrame
-		if (FrameIndex == RemoteStartFrameIndex + Setup.InitialLatencyInFrames + 1)
-		{
-			assert(OtherPlayerInitialInputs.UploadSuccess == GGNoRe::API::ABS_CPT_IPT_Emulator::SINGLETON::InputsBinaryPacketsForStartingRemote::UploadSuccess_E::Success);
-
-			for (const auto& RemotePlayerBinary : OtherPlayerInitialInputs.InputsBinaryPackets)
-			{
-				assert(GGNoRe::API::SystemMultiton::GetEmulator(SystemIndex()).DownloadRemotePlayerBinary(RemotePlayerBinary.data()) == GGNoRe::API::ABS_CPT_IPT_Emulator::SINGLETON::DownloadSuccess_E::Success);
-			}
-		}
-	}
-
-	uint8_t SystemIndex() const override
-	{
-		return 1;
-	}
-
 	float DeltaDurationInSeconds() const override
 	{
 		return Setup.RemoteMockHardwareFrameDurationInSeconds;
@@ -150,18 +42,9 @@ class TEST_RemoteMock final : public TEST_ABS_SystemMock
 public:
 	TEST_RemoteMock(const PlayersSetup Setup)
 		:
-		TEST_ABS_SystemMock(Setup),
-		TrueRemotePlayer2Identity({ Player2Id, true, RemoteStartFrameIndex, SystemIndex() }),
-		RemotePlayer1Identity({ Player1Id, false, RemoteStartFrameIndex, SystemIndex() }),
-		TrueRemotePlayer2(Setup.UseRandomInputs),
-		RemotePlayer1(Setup.UseRandomInputs)
+		TEST_ABS_SystemMock(DATA_Player{ Player2Id, true,  uint16_t(Setup.LocalStartFrameIndex + Setup.RemoteStartOffsetInFrames), Player2SystemIndex }, DATA_Player{ Player1Id, false,  uint16_t(Setup.LocalStartFrameIndex + Setup.RemoteStartOffsetInFrames), Player2SystemIndex }, Setup)
 	{
 		assert(Player1Id != Player2Id);
-	}
-
-	const TEST_Player& Player() const override
-	{
-		return TrueRemotePlayer2;
 	}
 };
 
@@ -181,19 +64,29 @@ bool Test1Local2RemoteMockRollback(const DATA_CFG Config, const TestEnvironment 
 	}
 
 	const bool AllowLocalDoubleSimulation = Setup.LocalMockHardwareFrameDurationInSeconds > Config.SimulationConfiguration.FrameDurationInSeconds;
+	if (AllowLocalDoubleSimulation)
+	{
+		// Creates too many edge cases around test initialization
+		return true;
+	}
+
 	const bool AllowRemoteDoubleSimulation = Setup.RemoteMockHardwareFrameDurationInSeconds > Config.SimulationConfiguration.FrameDurationInSeconds;
 
 	const bool AllowLocalStallAdvantage = Environment.ReceiveRemoteIntervalInFrames > 1 || AllowLocalDoubleSimulation || Setup.InitialLatencyInFrames > 0;
 	const bool AllowRemoteStallAdvantage = Environment.ReceiveRemoteIntervalInFrames > 1 || AllowRemoteDoubleSimulation || Setup.InitialLatencyInFrames > 0;
 
-	const bool RoundTripPossibleWithinRollbackWindow = (size_t)Environment.ReceiveRemoteIntervalInFrames + 1 <= Config.RollbackConfiguration.MinRollbackFrameCount && Setup.InitialLatencyInFrames < Config.RollbackConfiguration.MinRollbackFrameCount;
+	const bool RoundTripPossibleWithinRollbackWindow = (size_t)Environment.ReceiveRemoteIntervalInFrames * 2 + Setup.InitialLatencyInFrames < Config.RollbackConfiguration.MinRollbackFrameCount;
 
 	const bool AllowLocalStarvedForInput =
-		(size_t)Environment.ReceiveRemoteIntervalInFrames + 1 + AllowRemoteStallAdvantage + AllowLocalDoubleSimulation >= Config.RollbackConfiguration.MinRollbackFrameCount ||
+		(size_t)AllowRemoteStallAdvantage * (Config.SimulationConfiguration.StallTimerDurationInSeconds < Setup.RemoteMockHardwareFrameDurationInSeconds) * Config.RollbackConfiguration.MinRollbackFrameCount +
+		(size_t)AllowLocalDoubleSimulation * (Config.SimulationConfiguration.DoubleSimulationTimerDurationInSeconds < Setup.LocalMockHardwareFrameDurationInSeconds) * Config.RollbackConfiguration.MinRollbackFrameCount >=
+			Config.RollbackConfiguration.MinRollbackFrameCount ||
 		AllowRemoteDoubleSimulation ||
 		!RoundTripPossibleWithinRollbackWindow;
 	const bool AllowRemoteStarvedForInput =
-		(size_t)Environment.ReceiveRemoteIntervalInFrames + 1 + AllowLocalStallAdvantage + AllowRemoteDoubleSimulation >= Config.RollbackConfiguration.MinRollbackFrameCount ||
+		(size_t)AllowLocalStallAdvantage * (Config.SimulationConfiguration.StallTimerDurationInSeconds < Setup.LocalMockHardwareFrameDurationInSeconds) * Config.RollbackConfiguration.MinRollbackFrameCount +
+		(size_t)AllowRemoteDoubleSimulation * (Config.SimulationConfiguration.DoubleSimulationTimerDurationInSeconds < Setup.RemoteMockHardwareFrameDurationInSeconds) * Config.RollbackConfiguration.MinRollbackFrameCount >=
+			Config.RollbackConfiguration.MinRollbackFrameCount ||
 		AllowLocalDoubleSimulation ||
 		!RoundTripPossibleWithinRollbackWindow;
 
@@ -202,38 +95,38 @@ bool Test1Local2RemoteMockRollback(const DATA_CFG Config, const TestEnvironment 
 
 	for (size_t IterationIndex = 0; IterationIndex < Environment.TestDurationInFrames; ++IterationIndex)
 	{
+		Local.PreUpdate((uint16_t)IterationIndex + Setup.LocalStartFrameIndex);
+		Remote.PreUpdate((uint16_t)IterationIndex + Setup.LocalStartFrameIndex);
+
 		assert(Local.IsRunning());
 
-		if (IterationIndex == Setup.RemoteStartOffsetInFrames)
-		{
-			Local.SaveInitialStateToTransfer();
-			Remote.SaveInitialStateToTransfer();
-		}
-
-		Local.PreUpdate((uint16_t)IterationIndex + Setup.LocalStartFrameIndex, Remote.InitialStateToTransfer());
-		Remote.PreUpdate((uint16_t)IterationIndex + Setup.LocalStartFrameIndex, Local.InitialStateToTransfer());
-
 		Local.Update
-		({
-			AllowLocalDoubleSimulation,
-			AllowLocalStallAdvantage,
-			AllowLocalStarvedForInput,
-			Setup.LocalMockHardwareFrameDurationInSeconds < Config.SimulationConfiguration.FrameDurationInSeconds
-		});
+		(
+			{
+				AllowLocalDoubleSimulation,
+				AllowLocalStallAdvantage,
+				AllowLocalStarvedForInput,
+				Setup.LocalMockHardwareFrameDurationInSeconds < Config.SimulationConfiguration.FrameDurationInSeconds
+			},
+			Remote
+		);
 
 		if (Remote.IsRunning())
 		{
 			Remote.Update
-			({
-				AllowRemoteDoubleSimulation,
-				AllowRemoteStallAdvantage,
-				AllowRemoteStarvedForInput,
-				Setup.RemoteMockHardwareFrameDurationInSeconds < Config.SimulationConfiguration.FrameDurationInSeconds
-			});
+			(
+				{
+					AllowRemoteDoubleSimulation,
+					AllowRemoteStallAdvantage,
+					AllowRemoteStarvedForInput,
+					Setup.RemoteMockHardwareFrameDurationInSeconds < Config.SimulationConfiguration.FrameDurationInSeconds
+				},
+				Local
+			);
 		}
 
-		Local.PostUpdate((uint16_t)IterationIndex + Setup.LocalStartFrameIndex, Remote.InitialInputsToTransfer());
-		Remote.PostUpdate((uint16_t)IterationIndex + Setup.LocalStartFrameIndex, Local.InitialInputsToTransfer());
+		Local.PostUpdate((uint16_t)IterationIndex + Setup.LocalStartFrameIndex, Remote);
+		Remote.PostUpdate((uint16_t)IterationIndex + Setup.LocalStartFrameIndex, Local);
 
 		// Must be "greater than" in order to make sure that the initialization packet is loaded first otherwise it might be overwritten by a regular packet
 		if (IterationIndex > (size_t)Setup.RemoteStartOffsetInFrames + Setup.InitialLatencyInFrames && IterationIndex % Environment.ReceiveRemoteIntervalInFrames == 0)

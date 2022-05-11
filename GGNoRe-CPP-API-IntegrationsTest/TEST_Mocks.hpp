@@ -152,58 +152,64 @@ public:
 	};
 
 private:
-	size_t MockTickIndex = 0;
-	float UpdateTimer = 0.f;
+	const GGNoRe::API::DATA_Player ThisPlayerIdentity;
+	const GGNoRe::API::DATA_Player OtherPlayerIdentity;
 
-	// The state and inputs of the other player are needed to properly initialize
-	// This is a shortcut, in a real setup you would want to receive from the remote player/server what you need to initialize
-	TEST_CPT_State InitialStateToTransferInternal;
-	GGNoRe::API::ABS_CPT_IPT_Emulator::SINGLETON::InputsBinaryPacketsForStartingRemote InitialInputsToTransferInternal;
+	TEST_Player ThisPlayer;
+	TEST_Player OtherPlayer;
+
+	size_t MockTickIndex = 0;
+	GGNoRe::API::SER_FixedPoint UpdateTimer = 0.f;
+
+	// The state of the other player are needed to properly initialize
+	// This is an artefact of the mocking, in a real setup you would want to receive from the remote player/server what you need to initialize
+	TEST_CPT_State InitialStateToTransfer;
+	// The inputs of the other player are needed to properly initialize
+	// This is an artefact of the mocking, in a real setup you would want to receive from the remote player/server what you need to initialize
+	GGNoRe::API::ABS_CPT_IPT_Emulator::SINGLETON::InputsBinaryPacketsForStartingRemote InitialInputsToTransfer;
+	// Boolean flags required to work around the situation where one player simulates 2 frames and thus skips the pre-calculated transfer frame
+	// This is an artefact of the mocking, in a real setup you send/receive when ready, but for testing purposes the transfer timing must be pre-determinated
+	bool TransferInitialState = false;
+	bool LoadInitialState = true;
+	bool TransferInitialInputs = false;
+	bool LoadInitialInputs = true;
 
 protected:
 	const PlayersSetup Setup;
-	const uint16_t RemoteStartFrameIndex = 0;
 
-	TEST_ABS_SystemMock(const PlayersSetup Setup)
-		:Setup(Setup), RemoteStartFrameIndex(Setup.LocalStartFrameIndex + Setup.RemoteStartOffsetInFrames)
+	TEST_ABS_SystemMock(const GGNoRe::API::DATA_Player ThisPlayerIdentity, const GGNoRe::API::DATA_Player OtherPlayerIdentity, const PlayersSetup Setup)
+		:ThisPlayerIdentity(ThisPlayerIdentity), OtherPlayerIdentity(OtherPlayerIdentity), ThisPlayer(Setup.UseRandomInputs), OtherPlayer(Setup.UseRandomInputs), Setup(Setup)
 	{}
-
-	virtual void OnPreUpdate(const uint16_t TestFrameIndex, const TEST_CPT_State OtherPlayerInitialState) = 0;
-
-	virtual void OnPostUpdate(const uint16_t TestFrameIndex, const GGNoRe::API::ABS_CPT_IPT_Emulator::SINGLETON::InputsBinaryPacketsForStartingRemote OtherPlayerInitialInputs) = 0;
-
-	virtual uint8_t SystemIndex() const = 0;
 
 	virtual float DeltaDurationInSeconds() const = 0;
 
 public:
 	virtual ~TEST_ABS_SystemMock() = default;
 
-	inline TEST_CPT_State InitialStateToTransfer() const
-	{
-		return InitialStateToTransferInternal;
-	}
-
-	inline GGNoRe::API::ABS_CPT_IPT_Emulator::SINGLETON::InputsBinaryPacketsForStartingRemote InitialInputsToTransfer() const
-	{
-		return InitialInputsToTransferInternal;
-	}
-
 	inline bool IsRunning() const
 	{
-		return Player().Emulator().ExistsAtFrame(GGNoRe::API::SystemMultiton::GetRollbackable(SystemIndex()).UnsimulatedFrameIndex());
+		return ThisPlayer.Emulator().ExistsAtFrame(GGNoRe::API::SystemMultiton::GetRollbackable(ThisPlayerIdentity.SystemIndex).UnsimulatedFrameIndex());
 	}
 
-	inline void SaveInitialStateToTransfer() noexcept
-	{
-		InitialStateToTransferInternal = Player().State();
-	}
-
-	void PreUpdate(const uint16_t TestFrameIndex, const TEST_CPT_State OtherPlayerInitialState)
+	void PreUpdate(const uint16_t TestFrameIndex)
 	{
 		try
 		{
-			OnPreUpdate(TestFrameIndex, OtherPlayerInitialState);
+			if (TestFrameIndex == ThisPlayerIdentity.JoinFrameIndex && !ThisPlayer.Emulator().ExistsAtFrame(TestFrameIndex))
+			{
+				assert(SystemIndexes.find(ThisPlayerIdentity.SystemIndex) == SystemIndexes.cend());
+
+				GGNoRe::API::SystemMultiton::GetRollbackable(ThisPlayerIdentity.SystemIndex).SyncWithRemoteFrameIndex(ThisPlayerIdentity.JoinFrameIndex);
+				SystemIndexes.insert(ThisPlayerIdentity.SystemIndex);
+
+				ThisPlayer.ActivateNow(ThisPlayerIdentity);
+			}
+
+			if (!TransferInitialState && TestFrameIndex >= OtherPlayerIdentity.JoinFrameIndex)
+			{
+				InitialStateToTransfer = ThisPlayer.State();
+				TransferInitialState = true;
+			}
 		}
 		catch (const GGNoRe::API::I_RB_Rollbackable::RegisterSuccess_E& Success)
 		{
@@ -212,46 +218,67 @@ public:
 		}
 	}
 
-	void Update(const OutcomesSanityCheck AllowedOutcomes)
+	void Update(const OutcomesSanityCheck AllowedOutcomes, const TEST_ABS_SystemMock& OtherSystem)
 	{
 		assert(IsRunning());
+
+		try
+		{
+			const auto FrameIndex = GGNoRe::API::SystemMultiton::GetRollbackable(ThisPlayerIdentity.SystemIndex).UnsimulatedFrameIndex();
+			// For testing ActivateInPast, in case of a player joining you would want to schedule the activation to a future frame according to the ping
+			// One use case for ActivateInPast is sensitive server authoritative real time activations that you don't want triggerable through user inputs in order to avoid cheats for example
+			if (LoadInitialState && OtherSystem.TransferInitialState && FrameIndex >= OtherPlayerIdentity.JoinFrameIndex + Setup.InitialLatencyInFrames)
+			{
+				LoadInitialState = false;
+
+				if (Setup.InitialLatencyInFrames == 0 && FrameIndex == OtherPlayerIdentity.JoinFrameIndex && !OtherPlayer.Emulator().ExistsAtFrame(FrameIndex))
+				{
+					OtherPlayer.ActivateNow(OtherPlayerIdentity, OtherSystem.InitialStateToTransfer);
+				}
+				else if (!OtherPlayer.Emulator().ExistsAtFrame(OtherPlayerIdentity.JoinFrameIndex))
+				{
+					OtherPlayer.ActivateInPast(OtherPlayerIdentity, OtherPlayerIdentity.JoinFrameIndex, OtherSystem.InitialStateToTransfer);
+				}
+			}
+		}
+		catch (const GGNoRe::API::I_RB_Rollbackable::RegisterSuccess_E& Success)
+		{
+			// Basically illegal activation, in a real use you first would make sure you can activate before actually activating
+			assert(Success == GGNoRe::API::I_RB_Rollbackable::RegisterSuccess_E::UnreachablePastFrame && Setup.InitialLatencyInFrames > GGNoRe::API::DATA_CFG::Get().RollbackFrameCount());
+		}
 
 		bool ReadyForNextFrame = false;
 
 		while (!ReadyForNextFrame)
 		{
-			TestLog("____________ SYSTEM " + std::to_string(SystemIndex()) + " START - TICK " + std::to_string(MockTickIndex) + " ____________");
+			TestLog("____________ SYSTEM " + std::to_string(ThisPlayerIdentity.SystemIndex) + " START - TICK " + std::to_string(MockTickIndex) + " ____________");
 
-			auto Success = GGNoRe::API::SystemMultiton::GetRollbackable(SystemIndex()).TryTickingToNextFrame(DeltaDurationInSeconds());
+			auto Success = GGNoRe::API::SystemMultiton::GetRollbackable(ThisPlayerIdentity.SystemIndex).TryTickingToNextFrame(DeltaDurationInSeconds());
 
 			switch (Success)
 			{
 			case GGNoRe::API::ABS_RB_Rollbackable::SINGLETON::TickSuccess_E::DoubleSimulation:
-				TestLog("^^^^^^^^^^^^ SYSTEM " + std::to_string(SystemIndex()) + " DOUBLE - TICK " + std::to_string(MockTickIndex) + " ^^^^^^^^^^^^");
+				TestLog("^^^^^^^^^^^^ SYSTEM " + std::to_string(ThisPlayerIdentity.SystemIndex) + " DOUBLE - TICK " + std::to_string(MockTickIndex) + " ^^^^^^^^^^^^");
 				assert(AllowedOutcomes.AllowDoubleSimulation);
 				break;
-			case GGNoRe::API::ABS_RB_Rollbackable::SINGLETON::TickSuccess_E::FailedInitialization:
-				TestLog("^^^^^^^^^^^^ SYSTEM " + std::to_string(SystemIndex()) + " FAILURE - TICK " + std::to_string(MockTickIndex) + " ^^^^^^^^^^^^");
-				assert(false);
-			break;
 			case GGNoRe::API::ABS_RB_Rollbackable::SINGLETON::TickSuccess_E::NoActiveEmulator:
-				TestLog("^^^^^^^^^^^^ SYSTEM " + std::to_string(SystemIndex()) + " NO EMULATOR - TICK " + std::to_string(MockTickIndex) + " ^^^^^^^^^^^^");
+				TestLog("^^^^^^^^^^^^ SYSTEM " + std::to_string(ThisPlayerIdentity.SystemIndex) + " NO EMULATOR - TICK " + std::to_string(MockTickIndex) + " ^^^^^^^^^^^^");
 				assert(false);
-			break;
+				break;
 			case GGNoRe::API::ABS_RB_Rollbackable::SINGLETON::TickSuccess_E::StallAdvantage:
-				TestLog("^^^^^^^^^^^^ SYSTEM " + std::to_string(SystemIndex()) + " STALLING - TICK " + std::to_string(MockTickIndex) + " ^^^^^^^^^^^^");
+				TestLog("^^^^^^^^^^^^ SYSTEM " + std::to_string(ThisPlayerIdentity.SystemIndex) + " STALLING - TICK " + std::to_string(MockTickIndex) + " ^^^^^^^^^^^^");
 				assert(AllowedOutcomes.AllowStallAdvantage);
 				break;
 			case GGNoRe::API::ABS_RB_Rollbackable::SINGLETON::TickSuccess_E::StarvedForInput:
-				TestLog("^^^^^^^^^^^^ SYSTEM " + std::to_string(SystemIndex()) + " STARVED - TICK " + std::to_string(MockTickIndex) + " ^^^^^^^^^^^^");
+				TestLog("^^^^^^^^^^^^ SYSTEM " + std::to_string(ThisPlayerIdentity.SystemIndex) + " STARVED - TICK " + std::to_string(MockTickIndex) + " ^^^^^^^^^^^^");
 				assert(AllowedOutcomes.AllowStarvedForInput);
 				break;
 			case GGNoRe::API::ABS_RB_Rollbackable::SINGLETON::TickSuccess_E::StayCurrent:
-				TestLog("^^^^^^^^^^^^ SYSTEM " + std::to_string(SystemIndex()) + " STAY - TICK " + std::to_string(MockTickIndex) + " ^^^^^^^^^^^^");
+				TestLog("^^^^^^^^^^^^ SYSTEM " + std::to_string(ThisPlayerIdentity.SystemIndex) + " STAY - TICK " + std::to_string(MockTickIndex) + " ^^^^^^^^^^^^");
 				assert(AllowedOutcomes.AllowStayCurrent);
 				break;
 			case GGNoRe::API::ABS_RB_Rollbackable::SINGLETON::TickSuccess_E::ToNext:
-				TestLog("^^^^^^^^^^^^ SYSTEM " + std::to_string(SystemIndex()) + " NEXT - TICK " + std::to_string(MockTickIndex) + " ^^^^^^^^^^^^");
+				TestLog("^^^^^^^^^^^^ SYSTEM " + std::to_string(ThisPlayerIdentity.SystemIndex) + " NEXT - TICK " + std::to_string(MockTickIndex) + " ^^^^^^^^^^^^");
 				break;
 			default:
 				assert(false);
@@ -269,20 +296,31 @@ public:
 		}
 
 		// + 1 because should happen post TryTickingToNextFrame
-		if (GGNoRe::API::SystemMultiton::GetRollbackable(SystemIndex()).UnsimulatedFrameIndex() == RemoteStartFrameIndex + 1)
+		if (!TransferInitialInputs && GGNoRe::API::SystemMultiton::GetRollbackable(ThisPlayerIdentity.SystemIndex).UnsimulatedFrameIndex() >= OtherPlayerIdentity.JoinFrameIndex + 1)
 		{
 			assert(IsRunning());
-			InitialInputsToTransferInternal = GGNoRe::API::SystemMultiton::GetEmulator(SystemIndex()).UploadInputsFromRemoteStartFrameIndex(RemoteStartFrameIndex);
-			assert(InitialInputsToTransferInternal.UploadSuccess == GGNoRe::API::ABS_CPT_IPT_Emulator::SINGLETON::InputsBinaryPacketsForStartingRemote::UploadSuccess_E::Success);
+			InitialInputsToTransfer = GGNoRe::API::SystemMultiton::GetEmulator(ThisPlayerIdentity.SystemIndex).UploadInputsFromRemoteStartFrameIndex(OtherPlayerIdentity.JoinFrameIndex);
+			assert(InitialInputsToTransfer.UploadSuccess == GGNoRe::API::ABS_CPT_IPT_Emulator::SINGLETON::InputsBinaryPacketsForStartingRemote::UploadSuccess_E::Success);
+			TransferInitialInputs = true;
 		}
 	}
 
-	void PostUpdate(const uint16_t TestFrameIndex, const GGNoRe::API::ABS_CPT_IPT_Emulator::SINGLETON::InputsBinaryPacketsForStartingRemote OtherPlayerInitialInputs)
+	void PostUpdate(const uint16_t TestFrameIndex, const TEST_ABS_SystemMock& OtherSystem)
 	{
-		OnPostUpdate(TestFrameIndex, OtherPlayerInitialInputs);
-	}
+		const auto FrameIndex = GGNoRe::API::SystemMultiton::GetRollbackable(ThisPlayerIdentity.SystemIndex).UnsimulatedFrameIndex();
+		if (LoadInitialInputs && OtherSystem.TransferInitialInputs && !LoadInitialState)
+		{
+			assert(OtherSystem.InitialInputsToTransfer.UploadSuccess == GGNoRe::API::ABS_CPT_IPT_Emulator::SINGLETON::InputsBinaryPacketsForStartingRemote::UploadSuccess_E::Success);
 
-	virtual const TEST_Player& Player() const = 0;
+			LoadInitialInputs = false;
+
+			for (const auto& OtherPlayerBinary : OtherSystem.InitialInputsToTransfer.InputsBinaryPackets)
+			{
+				TestLog("############ INITIAL INPUT TRANSFER FROM PLAYER " + std::to_string(OtherSystem.ThisPlayerIdentity.Id) + " TO SYSTEM " + std::to_string(ThisPlayerIdentity.SystemIndex) + " ############");
+				assert(GGNoRe::API::SystemMultiton::GetEmulator(ThisPlayerIdentity.SystemIndex).DownloadRemotePlayerBinary(OtherPlayerBinary.data()) == GGNoRe::API::ABS_CPT_IPT_Emulator::SINGLETON::DownloadSuccess_E::Success);
+			}
+		}
+	}
 };
 
 }
