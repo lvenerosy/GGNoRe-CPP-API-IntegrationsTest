@@ -9,7 +9,6 @@
 #include <Input/CPT_IPT_TogglesPacket.hpp>
 
 #include <cassert>
-#include <cstdlib>
 #include <cstring>
 #ifdef GGNORECPPAPI_LOG
 #include <iostream>
@@ -26,6 +25,7 @@ inline void TestLog(const std::string& Message)
 
 class TEST_CPT_IPT_Emulator final : public GGNoRe::API::ABS_CPT_IPT_Emulator
 {
+	// The module uses pimpl for the private state but for brevity's sake, tests do not
 	struct Ownership
 	{
 		GGNoRe::API::DATA_Player Owner;
@@ -34,15 +34,11 @@ class TEST_CPT_IPT_Emulator final : public GGNoRe::API::ABS_CPT_IPT_Emulator
 	Ownership CurrentOwnership;
 
 	std::set<uint8_t> LocalMockInputs;
-	const bool UseRandomInputs = false;
 
 	std::vector<uint8_t> Inputs;
 
 public:
-	explicit TEST_CPT_IPT_Emulator(const bool UseRandomInputs)
-		:UseRandomInputs(UseRandomInputs)
-	{
-	}
+	TEST_CPT_IPT_Emulator() = default;
 
 	inline GGNoRe::API::DATA_Player Owner() const { return CurrentOwnership.Owner; }
 
@@ -85,6 +81,8 @@ protected:
 		}
 	}
 
+	// All the virtual methods are pure so there is no ambiguity whether to call the parent's implementation or not https://en.wikipedia.org/wiki/Liskov_substitution_principle
+	// The parent's implementation is separated by using the bridge pattern https://en.wikipedia.org/wiki/Bridge_pattern
 	void OnActivationChangeStartingFrame(const ActivationChangeEvent ActivationChange, const GGNoRe::API::SER_FixedPoint PreActivationConsumedDeltaDurationInSeconds) override {}
 
 	void OnRollActivationChangeBack(const ActivationChangeEvent ActivationChange) override {}
@@ -96,11 +94,6 @@ protected:
 
 	const std::set<uint8_t>& OnPollLocalInputs() override
 	{
-		if (UseRandomInputs)
-		{
-			LocalMockInputs = { {(uint8_t)(rand() % GGNoRe::API::CPT_IPT_TogglesPacket::MaxInputToken())} };
-		}
-
 		return LocalMockInputs;
 	}
 
@@ -157,6 +150,8 @@ protected:
 		PlayerId = ActivationChange.Owner.Id;
 	}
 
+	// All the virtual methods are pure so there is no ambiguity whether to call the parent's implementation or not https://en.wikipedia.org/wiki/Liskov_substitution_principle
+	// The parent's implementation is separated by using the bridge pattern https://en.wikipedia.org/wiki/Bridge_pattern
 	void OnActivationChangeStartingFrame(const ActivationChangeEvent ActivationChange, const GGNoRe::API::SER_FixedPoint PreActivationConsumedDeltaDurationInSeconds) override {}
 
 	void OnRollActivationChangeBack(const ActivationChangeEvent ActivationChange) override {}
@@ -219,6 +214,8 @@ protected:
 		}
 	}
 
+	// All the virtual methods are pure so there is no ambiguity whether to call the parent's implementation or not https://en.wikipedia.org/wiki/Liskov_substitution_principle
+	// The parent's implementation is separated by using the bridge pattern https://en.wikipedia.org/wiki/Bridge_pattern
 	void OnActivationChange(const ActivationChangeEvent ActivationChange) override {}
 
 	void OnActivationChangeStartingFrame(const ActivationChangeEvent ActivationChange, const GGNoRe::API::SER_FixedPoint PreActivationConsumedDeltaDurationInSeconds) override {}

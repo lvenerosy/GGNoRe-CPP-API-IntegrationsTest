@@ -10,6 +10,9 @@
  // In your game it could be a fireball with only save states and a simulator, or a player input controller with only an emulator
 class TEST_Player final
 {
+	// The module uses pimpl for the private state but for brevity's sake, tests do not
+	// In tests global state is used as a shortcut
+	// The module has no global state beside configuration and active components trackers so the user does not have to manually instantiate them, but it could easily be made free of any global state
 	static std::set<TEST_Player*> PlayersInternal;
 	static uint32_t DebugIdCounter;
 
@@ -49,8 +52,8 @@ class TEST_Player final
 	}
 
 public:
-	explicit TEST_Player(const bool UseRandomInputs)
-		:EmulatorInternal(UseRandomInputs), SaveStatesInternal(StateInternal), SimulatorInternal(StateInternal)
+	TEST_Player()
+		:SaveStatesInternal(StateInternal), SimulatorInternal(StateInternal)
 	{
 	}
 
@@ -140,7 +143,7 @@ void ForceResetAndCleanup()
 	SystemIndexes.clear();
 }
 
-class TEST_ABS_SystemMock
+class TEST_ABS_SystemMock final
 {
 public:
 	struct OutcomesSanityCheck
@@ -158,6 +161,8 @@ private:
 	TEST_Player ThisPlayer;
 	TEST_Player OtherPlayer;
 
+	const float DeltaDurationInSeconds = 0.f;
+
 	size_t MockTickIndex = 0;
 	GGNoRe::API::SER_FixedPoint UpdateTimer = 0.f;
 
@@ -174,17 +179,19 @@ private:
 	bool TransferInitialInputs = false;
 	bool LoadInitialInputs = true;
 
-protected:
 	const PlayersSetup Setup;
 
-	TEST_ABS_SystemMock(const GGNoRe::API::DATA_Player ThisPlayerIdentity, const GGNoRe::API::DATA_Player OtherPlayerIdentity, const PlayersSetup Setup)
-		:ThisPlayerIdentity(ThisPlayerIdentity), OtherPlayerIdentity(OtherPlayerIdentity), ThisPlayer(Setup.UseRandomInputs), OtherPlayer(Setup.UseRandomInputs), Setup(Setup)
-	{}
-
-	virtual float DeltaDurationInSeconds() const = 0;
-
 public:
-	virtual ~TEST_ABS_SystemMock() = default;
+	TEST_ABS_SystemMock(const GGNoRe::API::DATA_Player ThisPlayerIdentity, const GGNoRe::API::DATA_Player OtherPlayerIdentity, const float DeltaDurationInSeconds, const PlayersSetup Setup)
+		:ThisPlayerIdentity(ThisPlayerIdentity), OtherPlayerIdentity(OtherPlayerIdentity), DeltaDurationInSeconds(DeltaDurationInSeconds), Setup(Setup)
+	{
+		assert(ThisPlayerIdentity.Local);
+		assert(!OtherPlayerIdentity.Local);
+		assert(ThisPlayerIdentity.Id != OtherPlayerIdentity.Id);
+		assert(DeltaDurationInSeconds > 0.f);
+	}
+
+	~TEST_ABS_SystemMock() = default;
 
 	inline bool IsRunning() const
 	{
@@ -253,7 +260,7 @@ public:
 		{
 			TestLog("____________ SYSTEM " + std::to_string(ThisPlayerIdentity.SystemIndex) + " START - TICK " + std::to_string(MockTickIndex) + " ____________");
 
-			auto Success = GGNoRe::API::SystemMultiton::GetRollbackable(ThisPlayerIdentity.SystemIndex).TryTickingToNextFrame(DeltaDurationInSeconds());
+			auto Success = GGNoRe::API::SystemMultiton::GetRollbackable(ThisPlayerIdentity.SystemIndex).TryTickingToNextFrame(DeltaDurationInSeconds);
 
 			switch (Success)
 			{
@@ -287,7 +294,7 @@ public:
 
 			++MockTickIndex;
 
-			UpdateTimer += DeltaDurationInSeconds();
+			UpdateTimer += DeltaDurationInSeconds;
 			if (UpdateTimer >= GGNoRe::API::DATA_CFG::Get().SimulationConfiguration.FrameDurationInSeconds)
 			{
 				UpdateTimer -= GGNoRe::API::DATA_CFG::Get().SimulationConfiguration.FrameDurationInSeconds;

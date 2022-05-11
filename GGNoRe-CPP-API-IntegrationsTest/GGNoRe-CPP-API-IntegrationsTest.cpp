@@ -8,49 +8,7 @@
 
 using namespace GGNoRe::API;
 
-namespace TEST_NSPC_Systems
-{
-
-const id_t Player1Id = 0;
-const uint8_t Player1SystemIndex = 0;
-const id_t Player2Id = 1;
-const uint8_t Player2SystemIndex = 1;
-
-class TEST_LocalMock final : public TEST_ABS_SystemMock
-{
-	float DeltaDurationInSeconds() const override
-	{
-		return Setup.LocalMockHardwareFrameDurationInSeconds;
-	}
-
-public:
-	TEST_LocalMock(const PlayersSetup Setup)
-		:
-		TEST_ABS_SystemMock(DATA_Player{ Player1Id, true, Setup.LocalStartFrameIndex, Player1SystemIndex }, DATA_Player{ Player2Id, false, uint16_t(Setup.LocalStartFrameIndex + Setup.RemoteStartOffsetInFrames), Player1SystemIndex }, Setup)
-	{
-		assert(Player1Id != Player2Id);
-	}
-};
-
-class TEST_RemoteMock final : public TEST_ABS_SystemMock
-{
-	float DeltaDurationInSeconds() const override
-	{
-		return Setup.RemoteMockHardwareFrameDurationInSeconds;
-	}
-
-public:
-	TEST_RemoteMock(const PlayersSetup Setup)
-		:
-		TEST_ABS_SystemMock(DATA_Player{ Player2Id, true,  uint16_t(Setup.LocalStartFrameIndex + Setup.RemoteStartOffsetInFrames), Player2SystemIndex }, DATA_Player{ Player1Id, false,  uint16_t(Setup.LocalStartFrameIndex + Setup.RemoteStartOffsetInFrames), Player2SystemIndex }, Setup)
-	{
-		assert(Player1Id != Player2Id);
-	}
-};
-
-}
-
-bool Test1Local2RemoteMockRollback(const DATA_CFG Config, const TestEnvironment Environment, const PlayersSetup Setup)
+bool Test1Local1RemoteMockRollback(const DATA_CFG Config, const TestEnvironment Environment, const PlayersSetup Setup)
 {
 	assert(Environment.ReceiveRemoteIntervalInFrames > 0);
 	assert(Setup.LocalMockHardwareFrameDurationInSeconds > 0.f);
@@ -90,8 +48,12 @@ bool Test1Local2RemoteMockRollback(const DATA_CFG Config, const TestEnvironment 
 		AllowLocalDoubleSimulation ||
 		!RoundTripPossibleWithinRollbackWindow;
 
-	TEST_NSPC_Systems::TEST_LocalMock Local(Setup);
-	TEST_NSPC_Systems::TEST_RemoteMock Remote(Setup);
+	const id_t Player1Id = 0;
+	const uint8_t Player1SystemIndex = 0;
+	const id_t Player2Id = 1;
+	const uint8_t Player2SystemIndex = 1;
+	TEST_NSPC_Systems::TEST_ABS_SystemMock Local(DATA_Player{ Player1Id, true, Setup.LocalStartFrameIndex, Player1SystemIndex }, DATA_Player{ Player2Id, false, uint16_t(Setup.LocalStartFrameIndex + Setup.RemoteStartOffsetInFrames), Player1SystemIndex }, Setup.LocalMockHardwareFrameDurationInSeconds, Setup);
+	TEST_NSPC_Systems::TEST_ABS_SystemMock Remote(DATA_Player{ Player2Id, true, uint16_t(Setup.LocalStartFrameIndex + Setup.RemoteStartOffsetInFrames), Player2SystemIndex }, DATA_Player{ Player1Id, false,  uint16_t(Setup.LocalStartFrameIndex + Setup.RemoteStartOffsetInFrames), Player2SystemIndex }, Setup.RemoteMockHardwareFrameDurationInSeconds, Setup);
 
 	for (size_t IterationIndex = 0; IterationIndex < Environment.TestDurationInFrames; ++IterationIndex)
 	{

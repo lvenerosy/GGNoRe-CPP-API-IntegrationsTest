@@ -8,7 +8,6 @@
 
 #include <array>
 #include <cassert>
-#include <cstdlib>
 #include <functional>
 #include <iostream>
 
@@ -20,7 +19,6 @@ struct TestEnvironment
 
 struct PlayersSetup
 {
-	bool UseRandomInputs = false;
 	uint16_t LocalStartFrameIndex = 0;
 	uint16_t RemoteStartOffsetInFrames = 2;
 	uint16_t InitialLatencyInFrames = 3;
@@ -50,7 +48,7 @@ template<typename T, std::size_t N> RangeFunctorChain GetRangeFunctor(const std:
 	};
 }
 
-bool Test1Local2RemoteMockRollback(const GGNoRe::API::DATA_CFG Config, const TestEnvironment Environment, const PlayersSetup Setup);
+bool Test1Local1RemoteMockRollback(const GGNoRe::API::DATA_CFG Config, const TestEnvironment Environment, const PlayersSetup Setup);
 
 int main()
 {
@@ -75,7 +73,7 @@ int main()
 			++Progress.CurrentTestCounter;
 			if (Progress.CurrentTestCounter >= Progress.StartTestIndex)
 			{
-				assert(Test1Local2RemoteMockRollback(Config, Environment, Setup));
+				assert(Test1Local1RemoteMockRollback(Config, Environment, Setup));
 				std::cout << std::to_string(Progress.CurrentTestCounter) << "/" << Tests.GlobalTestCount << std::endl;
 			}
 		}
@@ -93,7 +91,6 @@ int main()
 
 	Tests = GetRangeFunctor(std::array<uint16_t, 3>{ 1, 2, 5 }, Environment.ReceiveRemoteIntervalInFrames, Tests);
 
-	Tests = GetRangeFunctor(std::array<bool, 1>{ false }, Setup.UseRandomInputs, Tests);
 	Tests = GetRangeFunctor(std::array<uint16_t, 3>{ 0, 1, 10 }, Setup.LocalStartFrameIndex, Tests);
 	Tests = GetRangeFunctor(std::array<uint16_t, 3>{ 0, 2, 5 }, Setup.RemoteStartOffsetInFrames, Tests);
 	Tests = GetRangeFunctor(std::array<uint16_t, 3>{ 0, 2, 5 }, Setup.InitialLatencyInFrames, Tests);
@@ -102,7 +99,6 @@ int main()
 	// 120fps, 60fps, 40fps, 16fps
 	Tests = GetRangeFunctor(std::array<float, 4>{ 0.008333f, 0.016667f, 0.025f, 0.0625f }, Setup.RemoteMockHardwareFrameDurationInSeconds, Tests);
 
-	srand(0);
 	Tests.RangeFunctor();
 
 	return 0;
