@@ -33,12 +33,18 @@ class TEST_CPT_IPT_Emulator final : public GGNoRe::API::ABS_CPT_IPT_Emulator
 	};
 	Ownership CurrentOwnership;
 
-	std::set<uint8_t> LocalMockInputs;
+	std::vector<std::set<uint8_t>> LocalMockInputsCircularBuffer;
+	std::vector<std::set<uint8_t>>::const_iterator InputsIterator;
 
 	std::vector<uint8_t> Inputs;
 
 public:
-	TEST_CPT_IPT_Emulator() = default;
+	// Move semantics might be unnecessary but I don't know if some debug flags might disable copy elision
+	TEST_CPT_IPT_Emulator(std::vector<std::set<uint8_t>>&& LocalMockInputsCircularBuffer)
+		:LocalMockInputsCircularBuffer(LocalMockInputsCircularBuffer), InputsIterator(this->LocalMockInputsCircularBuffer.cbegin())
+	{
+		assert(InputsIterator != this->LocalMockInputsCircularBuffer.cend());
+	}
 
 	inline GGNoRe::API::DATA_Player Owner() const { return CurrentOwnership.Owner; }
 
@@ -73,16 +79,10 @@ protected:
 		}
 	}
 
-	void OnActivationChange(const ActivationChangeEvent ActivationChange) override
-	{
-		if (ActivationChange.Type == ActivationChangeEvent::ChangeType_E::Activate)
-		{
-			LocalMockInputs = { { (uint8_t)ActivationChange.Owner.Id }, {10}, {20} };
-		}
-	}
-
 	// All the virtual methods are pure so there is no ambiguity whether to call the parent's implementation or not https://en.wikipedia.org/wiki/Liskov_substitution_principle
 	// The parent's implementation is separated by using the bridge pattern https://en.wikipedia.org/wiki/Bridge_pattern
+	void OnActivationChange(const ActivationChangeEvent ActivationChange) override {}
+
 	void OnActivationChangeStartingFrame(const ActivationChangeEvent ActivationChange, const GGNoRe::API::SER_FixedPoint PreActivationConsumedDeltaDurationInSeconds) override {}
 
 	void OnRollActivationChangeBack(const ActivationChangeEvent ActivationChange) override {}
@@ -90,11 +90,19 @@ protected:
 	void OnStarvedForInputFrame(const uint16_t FrameIndex) override {}
 	void OnStallAdvantageFrame(const uint16_t FrameIndex) override {}
 	void OnStayCurrentFrame(const uint16_t FrameIndex) override {}
-	void OnToNextFrame(const uint16_t FrameIndex) override {}
+	void OnToNextFrame(const uint16_t FrameIndex) override
+	{
+		if (++InputsIterator == LocalMockInputsCircularBuffer.cend())
+		{
+			InputsIterator = LocalMockInputsCircularBuffer.cbegin();
+		}
+	}
 
 	const std::set<uint8_t>& OnPollLocalInputs() override
 	{
-		return LocalMockInputs;
+		assert(InputsIterator != LocalMockInputsCircularBuffer.cend());
+
+		return *InputsIterator;
 	}
 
 	void OnReadyToUploadInputs(const std::vector<uint8_t>& BinaryPacket) override
@@ -105,7 +113,7 @@ protected:
 	void ResetAndCleanup() noexcept override
 	{
 		Inputs.clear();
-		LocalMockInputs.clear();
+		LocalMockInputsCircularBuffer.clear();
 	}
 };
 

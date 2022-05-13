@@ -52,8 +52,9 @@ class TEST_Player final
 	}
 
 public:
-	TEST_Player()
-		:SaveStatesInternal(StateInternal), SimulatorInternal(StateInternal)
+	// Move semantics might be unnecessary but I don't know if some debug flags might disable copy elision
+	TEST_Player(std::vector<std::set<uint8_t>>&& LocalMockInputsCircularBuffer)
+		:EmulatorInternal(std::move(LocalMockInputsCircularBuffer)), SaveStatesInternal(StateInternal), SimulatorInternal(StateInternal)
 	{
 	}
 
@@ -183,7 +184,10 @@ private:
 
 public:
 	TEST_ABS_SystemMock(const GGNoRe::API::DATA_Player ThisPlayerIdentity, const GGNoRe::API::DATA_Player OtherPlayerIdentity, const float DeltaDurationInSeconds, const PlayersSetup Setup)
-		:ThisPlayerIdentity(ThisPlayerIdentity), OtherPlayerIdentity(OtherPlayerIdentity), DeltaDurationInSeconds(DeltaDurationInSeconds), Setup(Setup)
+		:ThisPlayerIdentity(ThisPlayerIdentity), OtherPlayerIdentity(OtherPlayerIdentity),
+		ThisPlayer({ { (uint8_t)ThisPlayerIdentity.Id }, {}, {}, { 10 }, {10, 20}, {10}, {} }),
+		OtherPlayer({ { (uint8_t)OtherPlayerIdentity.Id }, {}, {}, { 10 }, { 10, 20 }, { 10 }, {} }),
+		DeltaDurationInSeconds(DeltaDurationInSeconds), Setup(Setup)
 	{
 		assert(ThisPlayerIdentity.Local);
 		assert(!OtherPlayerIdentity.Local);
