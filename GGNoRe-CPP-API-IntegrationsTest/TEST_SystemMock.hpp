@@ -4,115 +4,7 @@
 
 #pragma once
 
-#include <TEST_Components.hpp>
-
- // This is a player class grouping the 3 components for simplicity's sake
- // In your game it could be a fireball with only save states and a simulator, or a player input controller with only an emulator
-class TEST_Player final
-{
-	// The module uses pimpl for the private state but for brevity's sake, tests do not
-	// In tests global state is used as a shortcut
-	// The module has no global state beside configuration and active components trackers so the user does not have to manually instantiate them, but it could easily be made free of any global state
-	static std::set<TEST_Player*> PlayersInternal;
-	static uint32_t DebugIdCounter;
-
-	// To identify more quickly which is which when debugging
-	uint32_t DebugId = 0;
-
-	TEST_CPT_State StateInternal;
-
-	TEST_CPT_IPT_Emulator EmulatorInternal;
-	TEST_CPT_RB_SaveStates SaveStatesInternal;
-	TEST_CPT_RB_Simulator SimulatorInternal;
-
-	void OnActivateNow(const GGNoRe::API::DATA_Player Owner)
-	{
-		assert(PlayersInternal.find(this) == PlayersInternal.cend());
-
-		DebugId = DebugIdCounter++;
-
-		PlayersInternal.insert(this);
-
-		EmulatorInternal.ChangeActivationNow(Owner, GGNoRe::API::I_RB_Rollbackable::ActivationChangeEvent::ChangeType_E::Activate);
-		SaveStatesInternal.ChangeActivationNow(Owner, GGNoRe::API::I_RB_Rollbackable::ActivationChangeEvent::ChangeType_E::Activate);
-		SimulatorInternal.ChangeActivationNow(Owner, GGNoRe::API::I_RB_Rollbackable::ActivationChangeEvent::ChangeType_E::Activate);
-	}
-
-	void OnActivateInPast(const GGNoRe::API::DATA_Player Owner, const uint16_t StartFrameIndex)
-	{
-		assert(PlayersInternal.find(this) == PlayersInternal.cend());
-
-		DebugId = DebugIdCounter++;
-
-		PlayersInternal.insert(this);
-
-		EmulatorInternal.ChangeActivationInPast({ GGNoRe::API::I_RB_Rollbackable::ActivationChangeEvent::ChangeType_E::Activate, Owner, StartFrameIndex });
-		SaveStatesInternal.ChangeActivationInPast({ GGNoRe::API::I_RB_Rollbackable::ActivationChangeEvent::ChangeType_E::Activate, Owner, StartFrameIndex });
-		SimulatorInternal.ChangeActivationInPast({ GGNoRe::API::I_RB_Rollbackable::ActivationChangeEvent::ChangeType_E::Activate, Owner, StartFrameIndex });
-	}
-
-public:
-	// Move semantics might be unnecessary but I don't know if some debug flags might disable copy elision
-	TEST_Player(std::vector<std::set<uint8_t>>&& LocalMockInputsCircularBuffer)
-		:EmulatorInternal(std::move(LocalMockInputsCircularBuffer)), SaveStatesInternal(StateInternal), SimulatorInternal(StateInternal)
-	{
-	}
-
-	~TEST_Player()
-	{
-		PlayersInternal.erase(this);
-	}
-
-	static inline const std::set<TEST_Player*>& Players()
-	{
-		return PlayersInternal;
-	}
-
-	inline const TEST_CPT_State& State() const
-	{
-		return StateInternal;
-	}
-
-	inline const TEST_CPT_IPT_Emulator& Emulator() const
-	{
-		return EmulatorInternal;
-	}
-
-	void ActivateNow(const GGNoRe::API::DATA_Player Owner)
-	{
-		assert(Owner.Local);
-
-		OnActivateNow(Owner);
-	}
-
-	void ActivateNow(const GGNoRe::API::DATA_Player Owner, const TEST_CPT_State InitialState)
-	{
-		assert(!Owner.Local);
-
-		StateInternal = InitialState;
-
-		OnActivateNow(Owner);
-	}
-
-	void ActivateInPast(const GGNoRe::API::DATA_Player Owner, const uint16_t StartFrameIndex)
-	{
-		assert(Owner.Local);
-
-		OnActivateInPast(Owner, StartFrameIndex);
-	}
-
-	void ActivateInPast(const GGNoRe::API::DATA_Player Owner, const uint16_t StartFrameIndex, const TEST_CPT_State InitialState)
-	{
-		assert(!Owner.Local);
-
-		StateInternal = InitialState;
-
-		OnActivateInPast(Owner, StartFrameIndex);
-	}
-};
-
-std::set<TEST_Player*> TEST_Player::PlayersInternal;
-uint32_t TEST_Player::DebugIdCounter = 0;
+#include <TEST_Player.hpp>
 
 namespace TEST_NSPC_Systems
 {
@@ -144,7 +36,7 @@ void ForceResetAndCleanup()
 	SystemIndexes.clear();
 }
 
-class TEST_ABS_SystemMock final
+class TEST_SystemMock final
 {
 public:
 	struct OutcomesSanityCheck
@@ -169,7 +61,7 @@ private:
 
 	// The state of the other player are needed to properly initialize
 	// This is an artefact of the mocking, in a real setup you would want to receive from the remote player/server what you need to initialize
-	TEST_CPT_State InitialStateToTransfer;
+	TEST_Player::TEST_CPT_State InitialStateToTransfer;
 	// The inputs of the other player are needed to properly initialize
 	// This is an artefact of the mocking, in a real setup you would want to receive from the remote player/server what you need to initialize
 	GGNoRe::API::ABS_CPT_IPT_Emulator::SINGLETON::InputsBinaryPacketsForStartingRemote InitialInputsToTransfer;
@@ -183,11 +75,8 @@ private:
 	const PlayersSetup Setup;
 
 public:
-	TEST_ABS_SystemMock(const GGNoRe::API::DATA_Player ThisPlayerIdentity, const GGNoRe::API::DATA_Player OtherPlayerIdentity, const float DeltaDurationInSeconds, const PlayersSetup Setup)
-		:ThisPlayerIdentity(ThisPlayerIdentity), OtherPlayerIdentity(OtherPlayerIdentity),
-		ThisPlayer({ { (uint8_t)ThisPlayerIdentity.Id }, {}, {}, { 10 }, {10, 20}, {10}, {} }),
-		OtherPlayer({ { (uint8_t)OtherPlayerIdentity.Id }, {}, {}, { 10 }, { 10, 20 }, { 10 }, {} }),
-		DeltaDurationInSeconds(DeltaDurationInSeconds), Setup(Setup)
+	TEST_SystemMock(const GGNoRe::API::DATA_Player ThisPlayerIdentity, const GGNoRe::API::DATA_Player OtherPlayerIdentity, const float DeltaDurationInSeconds, const PlayersSetup Setup)
+		:ThisPlayerIdentity(ThisPlayerIdentity), OtherPlayerIdentity(OtherPlayerIdentity), DeltaDurationInSeconds(DeltaDurationInSeconds), Setup(Setup)
 	{
 		assert(ThisPlayerIdentity.Local);
 		assert(!OtherPlayerIdentity.Local);
@@ -195,7 +84,7 @@ public:
 		assert(DeltaDurationInSeconds > 0.f);
 	}
 
-	~TEST_ABS_SystemMock() = default;
+	~TEST_SystemMock() = default;
 
 	inline bool IsRunning() const
 	{
@@ -229,7 +118,7 @@ public:
 		}
 	}
 
-	void Update(const OutcomesSanityCheck AllowedOutcomes, const TEST_ABS_SystemMock& OtherSystem)
+	void Update(const OutcomesSanityCheck AllowedOutcomes, const TEST_SystemMock& OtherSystem)
 	{
 		assert(IsRunning());
 
@@ -316,7 +205,7 @@ public:
 		}
 	}
 
-	void PostUpdate(const uint16_t TestFrameIndex, const TEST_ABS_SystemMock& OtherSystem)
+	void PostUpdate(const uint16_t TestFrameIndex, const TEST_SystemMock& OtherSystem)
 	{
 		const auto FrameIndex = GGNoRe::API::SystemMultiton::GetRollbackable(ThisPlayerIdentity.SystemIndex).UnsimulatedFrameIndex();
 		if (LoadInitialInputs && OtherSystem.TransferInitialInputs && !LoadInitialState)

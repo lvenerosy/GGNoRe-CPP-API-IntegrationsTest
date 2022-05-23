@@ -18,10 +18,13 @@
     <ClInclude Include="GGNoRe-CPP-API-IntegrationsTest\GGNoRe-CPP-API-IntegrationsTest.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="GGNoRe-CPP-API-IntegrationsTest\TEST_Components.hpp">
+    <ClInclude Include="GGNoRe-CPP-API-IntegrationsTest\TEST_Player.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="GGNoRe-CPP-API-IntegrationsTest\TEST_Mocks.hpp">
+    <ClInclude Include="GGNoRe-CPP-API-IntegrationsTest\TEST_SystemMock.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="GGNoRe-CPP-API-IntegrationsTest\TEST_Fireball.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

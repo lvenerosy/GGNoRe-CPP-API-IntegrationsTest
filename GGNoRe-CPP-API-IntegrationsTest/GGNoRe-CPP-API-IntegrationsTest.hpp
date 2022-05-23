@@ -56,12 +56,12 @@ int main()
 	TestEnvironment Environment;
 	PlayersSetup Setup;
 
-	GGNoRe::API::ABS_DBG_HumanReadable::LoggingLevel = GGNoRe::API::ABS_DBG_HumanReadable::LoggingLevel_E::Verbose;
+	GGNoRe::API::ABS_DBG_HumanReadable::LoggingLevel = GGNoRe::API::ABS_DBG_HumanReadable::LoggingLevel_E::Lean;
 
 	struct TestProgress
 	{
 		size_t CurrentTestCounter = 0;
-		const size_t StartTestIndex = 1; // Run the sln in development mode for optimal speed while keeping asserts, then if an assert is hit start from the failing test and run in debug mode
+		const size_t StartTestIndex = 1041; // Run the sln in development mode for optimal speed while keeping asserts, then if an assert is hit start from the failing test and run in debug mode
 	};
 	TestProgress Progress;
 	RangeFunctorChain Tests;

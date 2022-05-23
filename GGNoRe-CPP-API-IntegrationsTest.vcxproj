@@ -228,8 +228,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="GGNoRe-CPP-API-IntegrationsTest\GGNoRe-CPP-API-IntegrationsTest.hpp" />
-    <ClInclude Include="GGNoRe-CPP-API-IntegrationsTest\TEST_Components.hpp" />
-    <ClInclude Include="GGNoRe-CPP-API-IntegrationsTest\TEST_Mocks.hpp" />
+    <ClInclude Include="GGNoRe-CPP-API-IntegrationsTest\TEST_Fireball.hpp" />
+    <ClInclude Include="GGNoRe-CPP-API-IntegrationsTest\TEST_Player.hpp" />
+    <ClInclude Include="GGNoRe-CPP-API-IntegrationsTest\TEST_SystemMock.hpp" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="GGNoRe-CPP-API-IntegrationsTest\GGNoRe-CPP-API-IntegrationsTest.cpp" />
