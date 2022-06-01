@@ -104,11 +104,11 @@ private:
 
 		// All the virtual methods are pure so there is no ambiguity whether to call the parent's implementation or not https://en.wikipedia.org/wiki/Liskov_substitution_principle
 		// The parent's implementation is separated by using the bridge pattern https://en.wikipedia.org/wiki/Bridge_pattern
-		void OnActivationChange(const ActivationChangeEvent ActivationChange) override {}
+		void OnActivationChange(const ActivationChangeEvent ActivationChange, const SimulationStage_E) override {}
 
 		void OnActivationChangeStartingFrame(const ActivationChangeEvent ActivationChange, const GGNoRe::API::SER_FixedPoint PreActivationConsumedDeltaDurationInSeconds) override {}
 
-		void OnRollActivationChangeBack(const ActivationChangeEvent ActivationChange) override {}
+		void OnRollActivationChangeBack(const ActivationChangeEvent ActivationChange, const SimulationStage_E) override {}
 
 		void OnStarvedForInputFrame(const uint16_t FrameIndex) override {}
 		void OnStallAdvantageFrame(const uint16_t FrameIndex) override {}
@@ -159,7 +159,7 @@ private:
 			}
 		}
 
-		void OnActivationChange(const ActivationChangeEvent ActivationChange) override
+		void OnActivationChange(const ActivationChangeEvent ActivationChange, const SimulationStage_E) override
 		{
 			PlayerId = ActivationChange.Owner.Id;
 		}
@@ -168,7 +168,7 @@ private:
 		// The parent's implementation is separated by using the bridge pattern https://en.wikipedia.org/wiki/Bridge_pattern
 		void OnActivationChangeStartingFrame(const ActivationChangeEvent ActivationChange, const GGNoRe::API::SER_FixedPoint PreActivationConsumedDeltaDurationInSeconds) override {}
 
-		void OnRollActivationChangeBack(const ActivationChangeEvent ActivationChange) override {}
+		void OnRollActivationChangeBack(const ActivationChangeEvent ActivationChange, const SimulationStage_E) override {}
 
 		void OnStarvedForInputFrame(const uint16_t FrameIndex) override {}
 		void OnStallAdvantageFrame(const uint16_t FrameIndex) override {}
@@ -236,11 +236,11 @@ private:
 
 		// All the virtual methods are pure so there is no ambiguity whether to call the parent's implementation or not https://en.wikipedia.org/wiki/Liskov_substitution_principle
 		// The parent's implementation is separated by using the bridge pattern https://en.wikipedia.org/wiki/Bridge_pattern
-		void OnActivationChange(const ActivationChangeEvent ActivationChange) override {}
+		void OnActivationChange(const ActivationChangeEvent ActivationChange, const SimulationStage_E) override {}
 
 		void OnActivationChangeStartingFrame(const ActivationChangeEvent ActivationChange, const GGNoRe::API::SER_FixedPoint PreActivationConsumedDeltaDurationInSeconds) override {}
 
-		void OnRollActivationChangeBack(const ActivationChangeEvent ActivationChange) override {}
+		void OnRollActivationChangeBack(const ActivationChangeEvent ActivationChange, const SimulationStage_E) override {}
 
 		void OnSimulateFrame(const uint16_t SimulatedFrameIndex, const std::set<uint8_t>& Inputs) override
 		{

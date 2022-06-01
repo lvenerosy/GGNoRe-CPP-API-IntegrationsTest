@@ -54,7 +54,7 @@ class TEST_Fireball final
 			}
 		}
 		
-		void OnActivationChange(const ActivationChangeEvent ActivationChange) override
+		void OnActivationChange(const ActivationChangeEvent ActivationChange, const SimulationStage_E) override
 		{
 			if (ActivationChange.Type == ActivationChangeEvent::ChangeType_E::Activate)
 			{
@@ -66,7 +66,7 @@ class TEST_Fireball final
 		// The parent's implementation is separated by using the bridge pattern https://en.wikipedia.org/wiki/Bridge_pattern
 		void OnActivationChangeStartingFrame(const ActivationChangeEvent ActivationChange, const GGNoRe::API::SER_FixedPoint PreActivationConsumedDeltaDurationInSeconds) override {}
 
-		void OnRollActivationChangeBack(const ActivationChangeEvent ActivationChange) override {}
+		void OnRollActivationChangeBack(const ActivationChangeEvent, const SimulationStage_E) override {}
 
 		void OnSimulateFrame(const uint16_t SimulatedFrameIndex, const std::set<uint8_t>& Inputs) override
 		{
