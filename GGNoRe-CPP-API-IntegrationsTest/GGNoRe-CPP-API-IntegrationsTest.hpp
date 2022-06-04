@@ -56,7 +56,7 @@ int main()
 	TestEnvironment Environment;
 	PlayersSetup Setup;
 
-	GGNoRe::API::ABS_DBG_HumanReadable::LoggingLevel = GGNoRe::API::ABS_DBG_HumanReadable::LoggingLevel_E::Lean;
+	GGNoRe::API::ABS_DBG_HumanReadable::LoggingLevel = GGNoRe::API::ABS_DBG_HumanReadable::LoggingLevel_E::Verbose;
 
 	struct TestProgress
 	{

@@ -21,8 +21,8 @@ namespace TEST_NSPC_Systems
 
 	const std::map<GGNoRe::API::id_t, std::vector<std::set<uint8_t>>> PlayerIdToInputPattern
 	{
-		std::make_pair(Player1Id, std::vector<std::set<uint8_t>>{ { (uint8_t)Player1Id }, {}, {}, { 10 }, { 10, FireballCombo[0] }, { FireballCombo[1] }, {} }),
-		std::make_pair(Player2Id, std::vector<std::set<uint8_t>>{ { (uint8_t)Player2Id }, {}, {}, { 10 }, { 10, FireballCombo[0] }, { FireballCombo[1] }, {} })
+		std::make_pair(Player1Id, std::vector<std::set<uint8_t>>{ { uint8_t(Player1Id + 1) }, {}, {}, { 10 }, { 10, FireballCombo[0] }, { FireballCombo[1] }, {} }),
+		std::make_pair(Player2Id, std::vector<std::set<uint8_t>>{ { uint8_t(Player2Id + 1) }, {}, {}, { 10 }, { 10, FireballCombo[0] }, { FireballCombo[1] }, {} })
 	};
 }
 
@@ -33,16 +33,38 @@ class TEST_Player final
 public:
 	struct TEST_CPT_State
 	{
-		uint16_t NonZero = 1; // Necessary otherwise the other fields initialized to 0 generate a checksum with a value of 0 which is considered as being a missing checksum
-		uint8_t InputsAccumulator = 0; // To check that the de/serialization are consistent with OnSimulateFrame
-		// The accumulator uses fixed point instead of regular floats because addition introduces error
-		// In user code you can use the conversion back to float as long as you don't modify the value you get, or if you modify it, the particular piece of state it affects should not be part of the serialization (sound/particle playback possibly)
-		GGNoRe::API::SER_FixedPoint DeltaDurationAccumulatorInSeconds = 0.f; // To check that the de/serialization are consistent with OnSimulateTick
-		bool PrimedForFireball = false; // True when detecting the first input of the combo
+		enum StateKeys_E : size_t
+		{
+			NonZero = 0, // Necessary otherwise the other fields initialized to 0 generate a checksum with a value of 0 which is considered as being a missing checksum
+			InputsAccumulator, // To check that the de/serialization are consistent with OnSimulateFrame
+			// The accumulator uses fixed point instead of regular floats because addition introduces error
+			// In user code you can use the conversion back to float as long as you don't modify the value you get, or if you modify it, the particular piece of state it affects should not be part of the serialization (sound/particle playback possibly)
+			DeltaDurationAccumulatorInSeconds, // To check that the de/serialization are consistent with OnSimulateTick
+			PrimedForFireball // True when detecting the first input of the combo
+		};
+
+		// CPT_SER_Tuple_TEMP is the custom tuple class used to quickly iterate on updating the content of the input packet header
+		// Here it is used as a facility to serialization, in a real use case you would have a buffer dedicated to serialization
+		using SerializableState = GGNoRe::API::CPT_SER_Tuple_TEMP<uint16_t, uint8_t, GGNoRe::API::SER_FixedPoint, bool>;
+		SerializableState State;
+
+		TEST_CPT_State()
+		{
+			std::get<StateKeys_E::NonZero>(State.Values()) = 1;
+			std::get<StateKeys_E::InputsAccumulator>(State.Values()) = 0;
+			std::get<StateKeys_E::DeltaDurationAccumulatorInSeconds>(State.Values()) = 0.f;
+			std::get<StateKeys_E::PrimedForFireball>(State.Values()) = false;
+		}
 
 		void LogHumanReadable(const std::string& Message) const
 		{
-			TestLog(Message + " " + std::to_string(NonZero) + " " + std::to_string(InputsAccumulator) + " " + std::to_string(DeltaDurationAccumulatorInSeconds) + " " + std::to_string(PrimedForFireball));
+			TestLog(
+				Message + " " +
+				std::to_string(std::get<StateKeys_E::NonZero>(State.Values())) + " " +
+				std::to_string(std::get<StateKeys_E::InputsAccumulator>(State.Values())) + " " +
+				std::to_string(std::get<StateKeys_E::DeltaDurationAccumulatorInSeconds>(State.Values())) + " " +
+				std::to_string(std::get<StateKeys_E::PrimedForFireball>(State.Values()))
+			);
 		}
 	};
 
@@ -139,6 +161,31 @@ private:
 
 	class TEST_CPT_RB_SaveStates final : public GGNoRe::API::ABS_CPT_RB_SaveStates
 	{
+		class SaveState final : public ABS_SaveState
+		{
+			const std::vector<uint8_t> BinaryBuffer;
+
+		public:
+			SaveState(const std::vector<uint8_t>& CurrentPlayerStateBuffer)
+				:BinaryBuffer(CurrentPlayerStateBuffer)
+			{}
+
+			const uint8_t* Binary() const override
+			{
+				return BinaryBuffer.data();
+			}
+
+			size_t Size() const override
+			{
+				return BinaryBuffer.size();
+			}
+
+			~SaveState()
+			{
+				// Could manage any specific memory cleanup/collection from here
+			}
+		};
+
 		TEST_CPT_State& PlayerState;
 		// The id is stored here for logging purposes, unnecessary during real use
 		GGNoRe::API::id_t PlayerId = 0;
@@ -175,38 +222,18 @@ private:
 		void OnStayCurrentFrame(const uint16_t FrameIndex) override {}
 		void OnToNextFrame(const uint16_t FrameIndex) override {}
 
-		void OnSerialize(std::vector<uint8_t>& TargetBufferOut) override
+		std::unique_ptr<ABS_SaveState> OnSerialize() override
 		{
-			TargetBufferOut.resize(sizeof(PlayerState.NonZero) + sizeof(PlayerState.InputsAccumulator) + sizeof(PlayerState.DeltaDurationAccumulatorInSeconds) + sizeof(PlayerState.PrimedForFireball));
-
-			std::memcpy(TargetBufferOut.data(), &PlayerState.NonZero, sizeof(PlayerState.NonZero));
-			size_t CopyOffset = sizeof(PlayerState.NonZero);
-
-			std::memcpy(TargetBufferOut.data() + CopyOffset, &PlayerState.InputsAccumulator, sizeof(PlayerState.InputsAccumulator));
-			CopyOffset += sizeof(PlayerState.InputsAccumulator);
-
-			std::memcpy(TargetBufferOut.data() + CopyOffset, &PlayerState.DeltaDurationAccumulatorInSeconds, sizeof(PlayerState.DeltaDurationAccumulatorInSeconds));
-			CopyOffset += sizeof(PlayerState.DeltaDurationAccumulatorInSeconds);
-
-			std::memcpy(TargetBufferOut.data() + CopyOffset, &PlayerState.PrimedForFireball, sizeof(PlayerState.PrimedForFireball));
-
 			PlayerState.LogHumanReadable("{TEST SAVE STATES SERIALIZE - PLAYER " + std::to_string(PlayerId) + "}");
+
+			return std::make_unique<SaveState>(PlayerState.State.UploadBinary());
 		}
 
-		void OnDeserialize(const std::vector<uint8_t>& SourceBuffer) override
+		void OnDeserialize(const std::unique_ptr<ABS_SaveState>& SourceBuffer) override
 		{
-			assert(!SourceBuffer.empty());
+			assert(SourceBuffer.get()->Size() > 0);
 
-			std::memcpy(&PlayerState.NonZero, SourceBuffer.data(), sizeof(PlayerState.NonZero));
-			size_t ReadOffset = sizeof(PlayerState.NonZero);
-
-			std::memcpy(&PlayerState.InputsAccumulator, SourceBuffer.data() + ReadOffset, sizeof(PlayerState.InputsAccumulator));
-			ReadOffset += sizeof(PlayerState.InputsAccumulator);
-
-			std::memcpy(&PlayerState.DeltaDurationAccumulatorInSeconds, SourceBuffer.data() + ReadOffset, sizeof(PlayerState.DeltaDurationAccumulatorInSeconds));
-			ReadOffset += sizeof(PlayerState.DeltaDurationAccumulatorInSeconds);
-
-			std::memcpy(&PlayerState.PrimedForFireball, SourceBuffer.data() + ReadOffset, sizeof(PlayerState.PrimedForFireball));
+			PlayerState.State.DownloadBinary(SourceBuffer->Binary());
 
 			PlayerState.LogHumanReadable("{TEST SAVE STATES DESERIALIZE - PLAYER " + std::to_string(PlayerId) + "}");
 		}
@@ -246,25 +273,25 @@ private:
 		{
 			for (auto Input : Inputs)
 			{
-				PlayerState.InputsAccumulator += Input;
+				std::get<TEST_CPT_State::StateKeys_E::InputsAccumulator>(PlayerState.State.Values()) += Input;
 			}
 
-			if (PlayerState.PrimedForFireball && Inputs.find(TEST_NSPC_Systems::FireballCombo[1]) != Inputs.cend())
+			if (std::get<TEST_CPT_State::StateKeys_E::PrimedForFireball>(PlayerState.State.Values()) && Inputs.find(TEST_NSPC_Systems::FireballCombo[1]) != Inputs.cend())
 			{
 				TEST_Fireball::CastFireball(OwnerAtFrame(SimulatedFrameIndex));
 			}
 
-			PlayerState.PrimedForFireball = false;
+			std::get<TEST_CPT_State::StateKeys_E::PrimedForFireball>(PlayerState.State.Values()) = false;
 
 			if (Inputs.find(TEST_NSPC_Systems::FireballCombo[0]) != Inputs.cend())
 			{
-				PlayerState.PrimedForFireball = true;
+				std::get<TEST_CPT_State::StateKeys_E::PrimedForFireball>(PlayerState.State.Values()) = true;
 			}
 		}
 
 		void OnSimulateTick(const GGNoRe::API::SER_FixedPoint DeltaDurationInSeconds) override
 		{
-			PlayerState.DeltaDurationAccumulatorInSeconds += DeltaDurationInSeconds;
+			std::get<TEST_CPT_State::StateKeys_E::DeltaDurationAccumulatorInSeconds>(PlayerState.State.Values()) += DeltaDurationInSeconds;
 		}
 
 		void OnStarvedForInputFrame(const uint16_t FrameIndex) override {}
