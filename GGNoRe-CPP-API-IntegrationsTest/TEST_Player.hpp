@@ -45,26 +45,15 @@ public:
 
 		// CPT_SER_Tuple_TEMP is the custom tuple class used to quickly iterate on updating the content of the input packet header
 		// Here it is used as a facility to serialization, in a real use case you would have a buffer dedicated to serialization
-		using SerializableState = GGNoRe::API::CPT_SER_Tuple_TEMP<uint16_t, uint8_t, GGNoRe::API::SER_FixedPoint, bool>;
+		using SerializableState = GGNoRe::API::CPT_SER_Tuple_TEMP<uint16_t, uint8_t, int64_t, bool>;
 		SerializableState State;
 
 		TEST_CPT_State()
 		{
 			std::get<StateKeys_E::NonZero>(State.Values()) = 1;
 			std::get<StateKeys_E::InputsAccumulator>(State.Values()) = 0;
-			std::get<StateKeys_E::DeltaDurationAccumulatorInSeconds>(State.Values()) = 0.f;
+			std::get<StateKeys_E::DeltaDurationAccumulatorInSeconds>(State.Values()) = 0;
 			std::get<StateKeys_E::PrimedForFireball>(State.Values()) = false;
-		}
-
-		void LogHumanReadable(const std::string& Message) const
-		{
-			TestLog(
-				Message + " " +
-				std::to_string(std::get<StateKeys_E::NonZero>(State.Values())) + " " +
-				std::to_string(std::get<StateKeys_E::InputsAccumulator>(State.Values())) + " " +
-				std::to_string(std::get<StateKeys_E::DeltaDurationAccumulatorInSeconds>(State.Values())) + " " +
-				std::to_string(std::get<StateKeys_E::PrimedForFireball>(State.Values()))
-			);
 		}
 	};
 
@@ -222,20 +211,22 @@ private:
 		void OnStayCurrentFrame(const uint16_t FrameIndex) override {}
 		void OnToNextFrame(const uint16_t FrameIndex) override {}
 
-		std::unique_ptr<ABS_SaveState> OnSerialize() override
+		std::unique_ptr<ABS_SaveState> OnSerialize(const uint16_t FrameIndex) override
 		{
-			PlayerState.LogHumanReadable("{TEST SAVE STATES SERIALIZE - PLAYER " + std::to_string(PlayerId) + "}");
+			PlayerState.State.LogHumanReadable(FrameIndex, "{TEST SAVE STATES SERIALIZE - PLAYER " + std::to_string(PlayerId) + "}", ABS_DBG_HumanReadable::LoggingLevel_E::Dump);
 
-			return std::make_unique<SaveState>(PlayerState.State.UploadBinary());
+			auto& StateBinary = PlayerState.State.UploadBinary();
+
+			return std::make_unique<SaveState>(StateBinary);
 		}
 
-		void OnDeserialize(const std::unique_ptr<ABS_SaveState>& SourceBuffer) override
+		void OnDeserialize(const std::unique_ptr<ABS_SaveState>& SourceBuffer, const uint16_t FrameIndex) override
 		{
 			assert(SourceBuffer.get()->Size() > 0);
 
 			PlayerState.State.DownloadBinary(SourceBuffer->Binary());
 
-			PlayerState.LogHumanReadable("{TEST SAVE STATES DESERIALIZE - PLAYER " + std::to_string(PlayerId) + "}");
+			PlayerState.State.LogHumanReadable(FrameIndex, "{TEST SAVE STATES DESERIALIZE - PLAYER " + std::to_string(PlayerId) + "}", ABS_DBG_HumanReadable::LoggingLevel_E::Dump);
 		}
 
 		void ResetAndCleanup() noexcept override {}
@@ -291,7 +282,8 @@ private:
 
 		void OnSimulateTick(const GGNoRe::API::SER_FixedPoint DeltaDurationInSeconds) override
 		{
-			std::get<TEST_CPT_State::StateKeys_E::DeltaDurationAccumulatorInSeconds>(PlayerState.State.Values()) += DeltaDurationInSeconds;
+			std::get<TEST_CPT_State::StateKeys_E::DeltaDurationAccumulatorInSeconds>(PlayerState.State.Values()) =
+				(GGNoRe::API::SER_FixedPoint(std::get<TEST_CPT_State::StateKeys_E::DeltaDurationAccumulatorInSeconds>(PlayerState.State.Values())) + DeltaDurationInSeconds).Serializable();
 		}
 
 		void OnStarvedForInputFrame(const uint16_t FrameIndex) override {}
