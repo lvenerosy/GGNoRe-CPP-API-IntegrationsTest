@@ -50,18 +50,35 @@ bool Test1Local1RemoteMockRollback(const DATA_CFG Config, const TestEnvironment 
 
 	const uint8_t Player1SystemIndex = 0;
 	const uint8_t Player2SystemIndex = 1;
-	TEST_NSPC_Systems::TEST_SystemMock Local(DATA_Player{ TEST_NSPC_Systems::Player1Id, true, Setup.LocalStartFrameIndex, Player1SystemIndex }, DATA_Player{ TEST_NSPC_Systems::Player2Id, false, uint16_t(Setup.LocalStartFrameIndex + Setup.RemoteStartOffsetInFrames), Player1SystemIndex }, Setup.LocalMockHardwareFrameDurationInSeconds, Setup);
-	TEST_NSPC_Systems::TEST_SystemMock Remote(DATA_Player{ TEST_NSPC_Systems::Player2Id, true, uint16_t(Setup.LocalStartFrameIndex + Setup.RemoteStartOffsetInFrames), Player2SystemIndex }, DATA_Player{ TEST_NSPC_Systems::Player1Id, false,  uint16_t(Setup.LocalStartFrameIndex + Setup.RemoteStartOffsetInFrames), Player2SystemIndex }, Setup.RemoteMockHardwareFrameDurationInSeconds, Setup);
+
+	// In this test, local updates before remote and the activations are order sensitive so the player ids are used to ensure proper ordering
+	assert(TEST_NSPC_Systems::Player1Id < TEST_NSPC_Systems::Player2Id);
+
+	TEST_NSPC_Systems::TEST_SystemMock Local(
+		DATA_Player{ TEST_NSPC_Systems::Player1Id, true, Setup.LocalStartFrameIndex, Player1SystemIndex },
+		DATA_Player{ TEST_NSPC_Systems::Player2Id, false, uint16_t(Setup.LocalStartFrameIndex + Setup.RemoteStartOffsetInFrames), Player1SystemIndex },
+		Setup.LocalMockHardwareFrameDurationInSeconds,
+		Setup
+	);
+	TEST_NSPC_Systems::TEST_SystemMock Remote(
+		DATA_Player{ TEST_NSPC_Systems::Player2Id, true, uint16_t(Setup.LocalStartFrameIndex + Setup.RemoteStartOffsetInFrames), Player2SystemIndex },
+		DATA_Player{ TEST_NSPC_Systems::Player1Id, false,  uint16_t(Setup.LocalStartFrameIndex + Setup.RemoteStartOffsetInFrames), Player2SystemIndex },
+		Setup.RemoteMockHardwareFrameDurationInSeconds,
+		Setup
+	);
 
 	for (size_t IterationIndex = 0; IterationIndex < Environment.TestDurationInFrames; ++IterationIndex)
 	{
-		Local.PreUpdate((uint16_t)IterationIndex + Setup.LocalStartFrameIndex);
-		Remote.PreUpdate((uint16_t)IterationIndex + Setup.LocalStartFrameIndex);
+		const uint16_t TestFrameIndex = (uint16_t)IterationIndex + Setup.LocalStartFrameIndex;
+
+		Local.PreUpdate(TestFrameIndex, Remote);
+		Remote.PreUpdate(TestFrameIndex, Local);
 
 		assert(Local.IsRunning());
 
 		Local.Update
 		(
+			TestFrameIndex,
 			{
 				AllowLocalDoubleSimulation,
 				AllowLocalStallAdvantage,
@@ -75,6 +92,7 @@ bool Test1Local1RemoteMockRollback(const DATA_CFG Config, const TestEnvironment 
 		{
 			Remote.Update
 			(
+				TestFrameIndex,
 				{
 					AllowRemoteDoubleSimulation,
 					AllowRemoteStallAdvantage,
@@ -85,8 +103,8 @@ bool Test1Local1RemoteMockRollback(const DATA_CFG Config, const TestEnvironment 
 			);
 		}
 
-		Local.PostUpdate((uint16_t)IterationIndex + Setup.LocalStartFrameIndex, Remote);
-		Remote.PostUpdate((uint16_t)IterationIndex + Setup.LocalStartFrameIndex, Local);
+		Local.PostUpdate(TestFrameIndex, Remote);
+		Remote.PostUpdate(TestFrameIndex, Local);
 
 		// Must be "greater than" in order to make sure that the initialization packet is loaded first otherwise it might be overwritten by a regular packet
 		if (IterationIndex > (size_t)Setup.RemoteStartOffsetInFrames + Setup.InitialLatencyInFrames && IterationIndex % Environment.ReceiveRemoteIntervalInFrames == 0)

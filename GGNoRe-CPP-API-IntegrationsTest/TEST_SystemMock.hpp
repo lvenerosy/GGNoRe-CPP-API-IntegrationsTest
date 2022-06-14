@@ -59,7 +59,7 @@ private:
 	size_t MockTickIndex = 0;
 	GGNoRe::API::SER_FixedPoint UpdateTimer = 0.f;
 
-	// The state of the other player are needed to properly initialize
+	// The state of the other player is needed to properly initialize
 	// This is an artefact of the mocking, in a real setup you would want to receive from the remote player/server what you need to initialize
 	TEST_Player::TEST_CPT_State InitialStateToTransfer;
 	// The inputs of the other player are needed to properly initialize
@@ -67,8 +67,6 @@ private:
 	GGNoRe::API::ABS_CPT_IPT_Emulator::SINGLETON::InputsBinaryPacketsForStartingRemote InitialInputsToTransfer;
 	// Boolean flags required to work around the situation where one player simulates 2 frames and thus skips the pre-calculated transfer frame
 	// This is an artefact of the mocking, in a real setup you send/receive when ready, but for testing purposes the transfer timing must be pre-determinated
-	bool TransferInitialState = false;
-	bool LoadInitialState = true;
 	bool TransferInitialInputs = false;
 	bool LoadInitialInputs = true;
 
@@ -91,60 +89,74 @@ public:
 		return ThisPlayer.Emulator().ExistsAtFrame(GGNoRe::API::SystemMultiton::GetRollbackable(ThisPlayerIdentity.SystemIndex).UnsimulatedFrameIndex());
 	}
 
-	void PreUpdate(const uint16_t TestFrameIndex)
+	void PreUpdate(const uint16_t TestFrameIndex, const TEST_SystemMock& OtherSystem)
 	{
-		try
+		if (!IsRunning() && TestFrameIndex == ThisPlayerIdentity.JoinFrameIndex)
 		{
-			if (TestFrameIndex == ThisPlayerIdentity.JoinFrameIndex && !ThisPlayer.Emulator().ExistsAtFrame(TestFrameIndex))
+			assert(!ThisPlayer.Emulator().ExistsAtFrame(TestFrameIndex));
+			assert(SystemIndexes.find(ThisPlayerIdentity.SystemIndex) == SystemIndexes.cend());
+
+			GGNoRe::API::SystemMultiton::GetRollbackable(ThisPlayerIdentity.SystemIndex).SyncWithRemoteFrameIndex(ThisPlayerIdentity.JoinFrameIndex);
+			SystemIndexes.insert(ThisPlayerIdentity.SystemIndex);
+
+			try
 			{
-				assert(SystemIndexes.find(ThisPlayerIdentity.SystemIndex) == SystemIndexes.cend());
+				if (TestFrameIndex == OtherPlayerIdentity.JoinFrameIndex && Setup.InitialLatencyInFrames == 0)
+				{
+					assert(!OtherPlayer.Emulator().ExistsAtFrame(TestFrameIndex));
 
-				GGNoRe::API::SystemMultiton::GetRollbackable(ThisPlayerIdentity.SystemIndex).SyncWithRemoteFrameIndex(ThisPlayerIdentity.JoinFrameIndex);
-				SystemIndexes.insert(ThisPlayerIdentity.SystemIndex);
-
-				ThisPlayer.ActivateNow(ThisPlayerIdentity);
+					if (ThisPlayerIdentity.Id < OtherPlayerIdentity.Id)
+					{
+						ThisPlayer.ActivateNow(ThisPlayerIdentity);
+						OtherPlayer.ActivateNow(OtherPlayerIdentity, OtherSystem.ThisPlayer.State());
+					}
+					else
+					{
+						OtherPlayer.ActivateNow(OtherPlayerIdentity, OtherSystem.ThisPlayer.State());
+						ThisPlayer.ActivateNow(ThisPlayerIdentity);
+					}
+				}
+				else
+				{
+					ThisPlayer.ActivateNow(ThisPlayerIdentity);
+				}
 			}
-
-			if (!TransferInitialState && TestFrameIndex >= OtherPlayerIdentity.JoinFrameIndex)
+			catch (const GGNoRe::API::I_RB_Rollbackable::RegisterSuccess_E& Success)
 			{
-				InitialStateToTransfer = ThisPlayer.State();
-				TransferInitialState = true;
+				// Basically illegal activation, in a real use you first would make sure you can activate before actually activating
+				assert(Success == GGNoRe::API::I_RB_Rollbackable::RegisterSuccess_E::UnreachablePastFrame && Setup.InitialLatencyInFrames > GGNoRe::API::DATA_CFG::Get().RollbackFrameCount());
 			}
 		}
-		catch (const GGNoRe::API::I_RB_Rollbackable::RegisterSuccess_E& Success)
+
+		if (TestFrameIndex == OtherPlayerIdentity.JoinFrameIndex)
 		{
-			// Basically illegal activation, in a real use you first would make sure you can activate before actually activating
-			assert(Success == GGNoRe::API::I_RB_Rollbackable::RegisterSuccess_E::UnreachablePastFrame && Setup.InitialLatencyInFrames > GGNoRe::API::DATA_CFG::Get().RollbackFrameCount());
+			InitialStateToTransfer = ThisPlayer.State();
 		}
 	}
 
-	void Update(const OutcomesSanityCheck AllowedOutcomes, const TEST_SystemMock& OtherSystem)
+	void Update(const uint16_t TestFrameIndex, const OutcomesSanityCheck AllowedOutcomes, const TEST_SystemMock& OtherSystem)
 	{
 		assert(IsRunning());
 
-		try
+		// For testing ActivateInPast, in case of a player joining you would want to schedule the activation to a future frame according to the ping
+		// One use case for ActivateInPast is sensitive server authoritative real time activations that you don't want triggerable through user inputs in order to avoid cheats for example
+		if (
+			!OtherPlayer.Emulator().ExistsAtFrame(TestFrameIndex) &&
+			!OtherPlayer.Emulator().ExistsAtFrame(OtherPlayerIdentity.JoinFrameIndex) &&
+			TestFrameIndex >= OtherPlayerIdentity.JoinFrameIndex + Setup.InitialLatencyInFrames
+			)
 		{
-			const auto FrameIndex = GGNoRe::API::SystemMultiton::GetRollbackable(ThisPlayerIdentity.SystemIndex).UnsimulatedFrameIndex();
-			// For testing ActivateInPast, in case of a player joining you would want to schedule the activation to a future frame according to the ping
-			// One use case for ActivateInPast is sensitive server authoritative real time activations that you don't want triggerable through user inputs in order to avoid cheats for example
-			if (LoadInitialState && OtherSystem.TransferInitialState && FrameIndex >= OtherPlayerIdentity.JoinFrameIndex + Setup.InitialLatencyInFrames)
-			{
-				LoadInitialState = false;
+			assert(ThisPlayer.Emulator().ExistsAtFrame(TestFrameIndex));
 
-				if (Setup.InitialLatencyInFrames == 0 && FrameIndex == OtherPlayerIdentity.JoinFrameIndex && !OtherPlayer.Emulator().ExistsAtFrame(FrameIndex))
-				{
-					OtherPlayer.ActivateNow(OtherPlayerIdentity, OtherSystem.InitialStateToTransfer);
-				}
-				else if (!OtherPlayer.Emulator().ExistsAtFrame(OtherPlayerIdentity.JoinFrameIndex))
-				{
-					OtherPlayer.ActivateInPast(OtherPlayerIdentity, OtherPlayerIdentity.JoinFrameIndex, OtherSystem.InitialStateToTransfer);
-				}
+			try
+			{
+				OtherPlayer.ActivateInPast(OtherPlayerIdentity, OtherPlayerIdentity.JoinFrameIndex, OtherSystem.InitialStateToTransfer, OtherPlayerIdentity.Id < ThisPlayerIdentity.Id);
 			}
-		}
-		catch (const GGNoRe::API::I_RB_Rollbackable::RegisterSuccess_E& Success)
-		{
-			// Basically illegal activation, in a real use you first would make sure you can activate before actually activating
-			assert(Success == GGNoRe::API::I_RB_Rollbackable::RegisterSuccess_E::UnreachablePastFrame && Setup.InitialLatencyInFrames > GGNoRe::API::DATA_CFG::Get().RollbackFrameCount());
+			catch (const GGNoRe::API::I_RB_Rollbackable::RegisterSuccess_E& Success)
+			{
+				// Basically illegal activation, in a real use you first would make sure you can activate before actually activating
+				assert(Success == GGNoRe::API::I_RB_Rollbackable::RegisterSuccess_E::UnreachablePastFrame && Setup.InitialLatencyInFrames > GGNoRe::API::DATA_CFG::Get().RollbackFrameCount());
+			}
 		}
 
 		bool ReadyForNextFrame = false;
@@ -198,7 +210,6 @@ public:
 		// + 1 because should happen post TryTickingToNextFrame
 		if (!TransferInitialInputs && GGNoRe::API::SystemMultiton::GetRollbackable(ThisPlayerIdentity.SystemIndex).UnsimulatedFrameIndex() >= OtherPlayerIdentity.JoinFrameIndex + 1)
 		{
-			assert(IsRunning());
 			InitialInputsToTransfer = GGNoRe::API::SystemMultiton::GetEmulator(ThisPlayerIdentity.SystemIndex).UploadInputsFromRemoteStartFrameIndex(OtherPlayerIdentity.JoinFrameIndex);
 			assert(InitialInputsToTransfer.UploadSuccess == GGNoRe::API::ABS_CPT_IPT_Emulator::SINGLETON::InputsBinaryPacketsForStartingRemote::UploadSuccess_E::Success);
 			TransferInitialInputs = true;
@@ -208,7 +219,7 @@ public:
 	void PostUpdate(const uint16_t TestFrameIndex, const TEST_SystemMock& OtherSystem)
 	{
 		const auto FrameIndex = GGNoRe::API::SystemMultiton::GetRollbackable(ThisPlayerIdentity.SystemIndex).UnsimulatedFrameIndex();
-		if (LoadInitialInputs && OtherSystem.TransferInitialInputs && !LoadInitialState)
+		if (LoadInitialInputs && OtherSystem.TransferInitialInputs)
 		{
 			assert(OtherSystem.InitialInputsToTransfer.UploadSuccess == GGNoRe::API::ABS_CPT_IPT_Emulator::SINGLETON::InputsBinaryPacketsForStartingRemote::UploadSuccess_E::Success);
 
