@@ -16,11 +16,6 @@ bool Test1Local1RemoteMockRollback(const DATA_CFG Config, const TestEnvironment 
 
 	DATA_CFG::Load(Config);
 
-	if (Setup.InitialLatencyInFrames > Config.RollbackConfiguration.MinRollbackFrameCount)
-	{
-		return true;
-	}
-
 	const bool AllowLocalDoubleSimulation = Setup.LocalMockHardwareFrameDurationInSeconds > Config.SimulationConfiguration.FrameDurationInSeconds;
 	if (AllowLocalDoubleSimulation)
 	{
@@ -30,10 +25,10 @@ bool Test1Local1RemoteMockRollback(const DATA_CFG Config, const TestEnvironment 
 
 	const bool AllowRemoteDoubleSimulation = Setup.RemoteMockHardwareFrameDurationInSeconds > Config.SimulationConfiguration.FrameDurationInSeconds;
 
-	const bool AllowLocalStallAdvantage = Environment.ReceiveRemoteIntervalInFrames > 1 || AllowLocalDoubleSimulation || Setup.InitialLatencyInFrames > 0;
-	const bool AllowRemoteStallAdvantage = Environment.ReceiveRemoteIntervalInFrames > 1 || AllowRemoteDoubleSimulation || Setup.InitialLatencyInFrames > 0;
+	const bool AllowLocalStallAdvantage = Environment.ReceiveRemoteIntervalInFrames > 1 || AllowLocalDoubleSimulation;
+	const bool AllowRemoteStallAdvantage = Environment.ReceiveRemoteIntervalInFrames > 1 || AllowRemoteDoubleSimulation;
 
-	const bool RoundTripPossibleWithinRollbackWindow = (size_t)Environment.ReceiveRemoteIntervalInFrames * 2 + Setup.InitialLatencyInFrames < Config.RollbackConfiguration.MinRollbackFrameCount;
+	const bool RoundTripPossibleWithinRollbackWindow = (size_t)Environment.ReceiveRemoteIntervalInFrames * 2 < Config.RollbackConfiguration.MinRollbackFrameCount;
 
 	const bool AllowLocalStarvedForInput =
 		(size_t)AllowRemoteStallAdvantage * (Config.SimulationConfiguration.StallTimerDurationInSeconds < Setup.RemoteMockHardwareFrameDurationInSeconds) * Config.RollbackConfiguration.MinRollbackFrameCount +
@@ -105,7 +100,7 @@ bool Test1Local1RemoteMockRollback(const DATA_CFG Config, const TestEnvironment 
 		Remote.PostUpdate(TestFrameIndex, Local);
 
 		// Must be "greater than" in order to make sure that the initialization packet is loaded first otherwise it might be overwritten by a regular packet
-		if (IterationIndex > (size_t)Setup.RemoteStartOffsetInFrames + Setup.InitialLatencyInFrames && IterationIndex % Environment.ReceiveRemoteIntervalInFrames == 0)
+		if (IterationIndex > (size_t)Setup.RemoteStartOffsetInFrames && IterationIndex % Environment.ReceiveRemoteIntervalInFrames == 0)
 		{
 			TEST_NSPC_Systems::TransferLocalPlayersInputs();
 		}

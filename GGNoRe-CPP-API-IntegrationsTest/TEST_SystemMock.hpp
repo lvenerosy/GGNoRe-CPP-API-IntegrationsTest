@@ -102,7 +102,7 @@ public:
 
 			try
 			{
-				if (TestFrameIndex == OtherPlayerIdentity.JoinFrameIndex && Setup.InitialLatencyInFrames == 0)
+				if (TestFrameIndex == OtherPlayerIdentity.JoinFrameIndex)
 				{
 					assert(!OtherPlayer.Emulator().ExistsAtFrame(TestFrameIndex));
 					assert(!OtherPlayerHasBeenActivated);
@@ -125,10 +125,9 @@ public:
 					ThisPlayer.ActivateNow(ThisPlayerIdentity);
 				}
 			}
-			catch (const GGNoRe::API::I_RB_Rollbackable::RegisterSuccess_E& Success)
+			catch (const GGNoRe::API::I_RB_Rollbackable::RegisterSuccess_E&)
 			{
-				// Basically illegal activation, in a real use you first would make sure you can activate before actually activating
-				assert(Success == GGNoRe::API::I_RB_Rollbackable::RegisterSuccess_E::UnreachablePastFrame && Setup.InitialLatencyInFrames > GGNoRe::API::DATA_CFG::Get().RollbackFrameCount());
+				assert(false);
 			}
 		}
 
@@ -144,33 +143,27 @@ public:
 
 		const auto FrameIndex = GGNoRe::API::SystemMultiton::GetRollbackable(ThisPlayerIdentity.SystemIndex).UnsimulatedFrameIndex();
 
-		// For testing ActivateInPast, in case of a player joining you would want to schedule the activation to a future frame according to the ping
-		// One use case for ActivateInPast is sensitive server authoritative real time activations that you don't want triggerable through user inputs in order to avoid cheats for example
-		if (!OtherPlayerHasBeenActivated && FrameIndex >= OtherPlayerIdentity.JoinFrameIndex + Setup.InitialLatencyInFrames)
+		if (!OtherPlayerHasBeenActivated && FrameIndex >= OtherPlayerIdentity.JoinFrameIndex)
 		{
 			assert(ThisPlayer.Emulator().ExistsAtFrame(FrameIndex));
+			assert(OtherPlayerIdentity.JoinFrameIndex > ThisPlayerIdentity.JoinFrameIndex);
 
 			try
 			{
 				if (OtherPlayerIdentity.JoinFrameIndex == FrameIndex)
 				{
-					assert(Setup.InitialLatencyInFrames == 0);
-
 					OtherPlayer.ActivateNow(OtherPlayerIdentity, OtherSystem.ThisPlayer.State());
 				}
 				else
 				{
-					assert(Setup.InitialLatencyInFrames > 0);
-
-					OtherPlayer.ActivateInPast(OtherPlayerIdentity, OtherPlayerIdentity.JoinFrameIndex, OtherSystem.InitialStateToTransfer, OtherPlayerIdentity.Id > ThisPlayerIdentity.Id);
+					OtherPlayer.ActivateInPast(OtherPlayerIdentity, OtherPlayerIdentity.JoinFrameIndex, OtherSystem.InitialStateToTransfer);
 				}
 
 				OtherPlayerHasBeenActivated = true;
 			}
-			catch (const GGNoRe::API::I_RB_Rollbackable::RegisterSuccess_E& Success)
+			catch (const GGNoRe::API::I_RB_Rollbackable::RegisterSuccess_E&)
 			{
-				// Basically illegal activation, in a real use you first would make sure you can activate before actually activating
-				assert(Success == GGNoRe::API::I_RB_Rollbackable::RegisterSuccess_E::UnreachablePastFrame && Setup.InitialLatencyInFrames > GGNoRe::API::DATA_CFG::Get().RollbackFrameCount());
+				assert(false);
 			}
 		}
 

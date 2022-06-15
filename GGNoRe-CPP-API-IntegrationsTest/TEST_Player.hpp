@@ -321,7 +321,7 @@ private:
 		SimulatorInternal.ChangeActivationNow(Owner, GGNoRe::API::I_RB_Rollbackable::ActivationChangeEvent::ChangeType_E::Activate);
 	}
 
-	void OnActivateInPast(const GGNoRe::API::DATA_Player Owner, const uint16_t StartFrameIndex, const uint32_t ConnectionOrder)
+	void OnActivateInPast(const GGNoRe::API::DATA_Player Owner, const uint16_t StartFrameIndex)
 	{
 		assert(PlayersInternal.find(this) == PlayersInternal.cend());
 
@@ -329,9 +329,10 @@ private:
 
 		PlayersInternal.insert(this);
 
-		EmulatorInternal.ChangeActivationInPast({ GGNoRe::API::I_RB_Rollbackable::ActivationChangeEvent::ChangeType_E::Activate, Owner, StartFrameIndex }, { true, 3 * ConnectionOrder });
-		SaveStatesInternal.ChangeActivationInPast({ GGNoRe::API::I_RB_Rollbackable::ActivationChangeEvent::ChangeType_E::Activate, Owner, StartFrameIndex }, { true, 3 * ConnectionOrder + 1 });
-		SimulatorInternal.ChangeActivationInPast({ GGNoRe::API::I_RB_Rollbackable::ActivationChangeEvent::ChangeType_E::Activate, Owner, StartFrameIndex }, { true, 3 * ConnectionOrder + 2 });
+		// The second argument is the processing order, necessary when changing a past activation because the checksum is order dependent
+		EmulatorInternal.ChangeActivationInPast({ GGNoRe::API::I_RB_Rollbackable::ActivationChangeEvent::ChangeType_E::Activate, Owner, StartFrameIndex }, { true, 0 });
+		SaveStatesInternal.ChangeActivationInPast({ GGNoRe::API::I_RB_Rollbackable::ActivationChangeEvent::ChangeType_E::Activate, Owner, StartFrameIndex }, { true, 1 });
+		SimulatorInternal.ChangeActivationInPast({ GGNoRe::API::I_RB_Rollbackable::ActivationChangeEvent::ChangeType_E::Activate, Owner, StartFrameIndex }, { true, 2 });
 	}
 
 public:
@@ -376,20 +377,20 @@ public:
 		OnActivateNow(Owner);
 	}
 
-	void ActivateInPast(const GGNoRe::API::DATA_Player Owner, const uint16_t StartFrameIndex, const uint32_t ConnectionOrder)
+	void ActivateInPast(const GGNoRe::API::DATA_Player Owner, const uint16_t StartFrameIndex)
 	{
 		assert(Owner.Local);
 
-		OnActivateInPast(Owner, StartFrameIndex, ConnectionOrder);
+		OnActivateInPast(Owner, StartFrameIndex);
 	}
 
-	void ActivateInPast(const GGNoRe::API::DATA_Player Owner, const uint16_t StartFrameIndex, const TEST_CPT_State InitialState, const uint32_t ConnectionOrder)
+	void ActivateInPast(const GGNoRe::API::DATA_Player Owner, const uint16_t StartFrameIndex, const TEST_CPT_State InitialState)
 	{
 		assert(!Owner.Local);
 
 		StateInternal = InitialState;
 
-		OnActivateInPast(Owner, StartFrameIndex, ConnectionOrder);
+		OnActivateInPast(Owner, StartFrameIndex);
 	}
 };
 

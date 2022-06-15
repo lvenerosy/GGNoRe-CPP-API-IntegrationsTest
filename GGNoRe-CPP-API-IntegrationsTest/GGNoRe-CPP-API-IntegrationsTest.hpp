@@ -21,7 +21,6 @@ struct PlayersSetup
 {
 	uint16_t LocalStartFrameIndex = 0;
 	uint16_t RemoteStartOffsetInFrames = 2;
-	uint16_t InitialLatencyInFrames = 3;
 	float LocalMockHardwareFrameDurationInSeconds = 0.016667f;
 	float RemoteMockHardwareFrameDurationInSeconds = 0.016667f;
 };
@@ -61,7 +60,7 @@ int main()
 	struct TestProgress
 	{
 		size_t CurrentTestCounter = 0;
-		const size_t StartTestIndex = 20801; // Run the sln in development mode for optimal speed while keeping asserts, then if an assert is hit start from the failing test and run in debug mode
+		const size_t StartTestIndex = 1; // Run the sln in development mode for optimal speed while keeping asserts, then if an assert is hit start from the failing test and run in debug mode
 	};
 	TestProgress Progress;
 	RangeFunctorChain Tests;
@@ -93,7 +92,6 @@ int main()
 
 	Tests = GetRangeFunctor(std::array<uint16_t, 3>{ 0, 1, 10 }, Setup.LocalStartFrameIndex, Tests);
 	Tests = GetRangeFunctor(std::array<uint16_t, 3>{ 0, 2, 5 }, Setup.RemoteStartOffsetInFrames, Tests);
-	Tests = GetRangeFunctor(std::array<uint16_t, 3>{ 0, 2, 5 }, Setup.InitialLatencyInFrames, Tests);
 	// 90fps, 60fps, 30fps
 	Tests = GetRangeFunctor(std::array<float, 3>{ 0.011111f, 0.016667f, 0.033333f }, Setup.LocalMockHardwareFrameDurationInSeconds, Tests);
 	// 120fps, 60fps, 40fps, 16fps
