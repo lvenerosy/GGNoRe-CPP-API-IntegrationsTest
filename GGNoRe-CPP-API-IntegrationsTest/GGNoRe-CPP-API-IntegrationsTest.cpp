@@ -78,7 +78,6 @@ bool Test1Local1RemoteMockRollback(const DATA_CFG Config, const TestEnvironment 
 
 		Local.Update
 		(
-			TestFrameIndex,
 			{
 				AllowLocalDoubleSimulation,
 				AllowLocalStallAdvantage,
@@ -92,7 +91,6 @@ bool Test1Local1RemoteMockRollback(const DATA_CFG Config, const TestEnvironment 
 		{
 			Remote.Update
 			(
-				TestFrameIndex,
 				{
 					AllowRemoteDoubleSimulation,
 					AllowRemoteStallAdvantage,

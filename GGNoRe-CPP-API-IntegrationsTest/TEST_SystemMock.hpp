@@ -69,6 +69,7 @@ private:
 	// This is an artefact of the mocking, in a real setup you send/receive when ready, but for testing purposes the transfer timing must be pre-determinated
 	bool TransferInitialInputs = false;
 	bool LoadInitialInputs = true;
+	bool OtherPlayerHasBeenActivated = false;
 
 	const PlayersSetup Setup;
 
@@ -104,15 +105,18 @@ public:
 				if (TestFrameIndex == OtherPlayerIdentity.JoinFrameIndex && Setup.InitialLatencyInFrames == 0)
 				{
 					assert(!OtherPlayer.Emulator().ExistsAtFrame(TestFrameIndex));
+					assert(!OtherPlayerHasBeenActivated);
 
 					if (ThisPlayerIdentity.Id < OtherPlayerIdentity.Id)
 					{
 						ThisPlayer.ActivateNow(ThisPlayerIdentity);
 						OtherPlayer.ActivateNow(OtherPlayerIdentity, OtherSystem.ThisPlayer.State());
+						OtherPlayerHasBeenActivated = true;
 					}
 					else
 					{
 						OtherPlayer.ActivateNow(OtherPlayerIdentity, OtherSystem.ThisPlayer.State());
+						OtherPlayerHasBeenActivated = true;
 						ThisPlayer.ActivateNow(ThisPlayerIdentity);
 					}
 				}
@@ -134,23 +138,34 @@ public:
 		}
 	}
 
-	void Update(const uint16_t TestFrameIndex, const OutcomesSanityCheck AllowedOutcomes, const TEST_SystemMock& OtherSystem)
+	void Update(const OutcomesSanityCheck AllowedOutcomes, const TEST_SystemMock& OtherSystem)
 	{
 		assert(IsRunning());
 
+		const auto FrameIndex = GGNoRe::API::SystemMultiton::GetRollbackable(ThisPlayerIdentity.SystemIndex).UnsimulatedFrameIndex();
+
 		// For testing ActivateInPast, in case of a player joining you would want to schedule the activation to a future frame according to the ping
 		// One use case for ActivateInPast is sensitive server authoritative real time activations that you don't want triggerable through user inputs in order to avoid cheats for example
-		if (
-			!OtherPlayer.Emulator().ExistsAtFrame(TestFrameIndex) &&
-			!OtherPlayer.Emulator().ExistsAtFrame(OtherPlayerIdentity.JoinFrameIndex) &&
-			TestFrameIndex >= OtherPlayerIdentity.JoinFrameIndex + Setup.InitialLatencyInFrames
-			)
+		if (!OtherPlayerHasBeenActivated && FrameIndex >= OtherPlayerIdentity.JoinFrameIndex + Setup.InitialLatencyInFrames)
 		{
-			assert(ThisPlayer.Emulator().ExistsAtFrame(TestFrameIndex));
+			assert(ThisPlayer.Emulator().ExistsAtFrame(FrameIndex));
 
 			try
 			{
-				OtherPlayer.ActivateInPast(OtherPlayerIdentity, OtherPlayerIdentity.JoinFrameIndex, OtherSystem.InitialStateToTransfer, OtherPlayerIdentity.Id < ThisPlayerIdentity.Id);
+				if (OtherPlayerIdentity.JoinFrameIndex == FrameIndex)
+				{
+					assert(Setup.InitialLatencyInFrames == 0);
+
+					OtherPlayer.ActivateNow(OtherPlayerIdentity, OtherSystem.ThisPlayer.State());
+				}
+				else
+				{
+					assert(Setup.InitialLatencyInFrames > 0);
+
+					OtherPlayer.ActivateInPast(OtherPlayerIdentity, OtherPlayerIdentity.JoinFrameIndex, OtherSystem.InitialStateToTransfer, OtherPlayerIdentity.Id > ThisPlayerIdentity.Id);
+				}
+
+				OtherPlayerHasBeenActivated = true;
 			}
 			catch (const GGNoRe::API::I_RB_Rollbackable::RegisterSuccess_E& Success)
 			{
@@ -218,8 +233,7 @@ public:
 
 	void PostUpdate(const uint16_t TestFrameIndex, const TEST_SystemMock& OtherSystem)
 	{
-		const auto FrameIndex = GGNoRe::API::SystemMultiton::GetRollbackable(ThisPlayerIdentity.SystemIndex).UnsimulatedFrameIndex();
-		if (LoadInitialInputs && OtherSystem.TransferInitialInputs)
+		if (LoadInitialInputs && OtherSystem.TransferInitialInputs && OtherPlayerHasBeenActivated)
 		{
 			assert(OtherSystem.InitialInputsToTransfer.UploadSuccess == GGNoRe::API::ABS_CPT_IPT_Emulator::SINGLETON::InputsBinaryPacketsForStartingRemote::UploadSuccess_E::Success);
 
