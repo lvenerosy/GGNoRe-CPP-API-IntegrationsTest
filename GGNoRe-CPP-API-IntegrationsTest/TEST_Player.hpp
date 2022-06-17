@@ -232,6 +232,8 @@ private:
 		void ResetAndCleanup() noexcept override {}
 	};
 
+	// ABS_CPT_RB_Simulator is a helper component in case you build your game from scratch with GGNoRe
+	// If you already have your game simulation you can make GGNoRe use it with ABS_CPT_RB_Simulator::SINGLETON::SetSimulationStrategies then call TryTickingToNextFrame instead
 	class TEST_CPT_RB_Simulator final : public GGNoRe::API::ABS_CPT_RB_Simulator
 	{
 		TEST_CPT_State& PlayerState;

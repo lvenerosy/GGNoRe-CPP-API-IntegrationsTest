@@ -28,6 +28,8 @@ class TEST_Fireball final
 	// The module has no global state beside configuration and active components trackers so the user does not have to manually instantiate them, but it could easily be made free of any global state
 	static std::vector<std::unique_ptr<TEST_Fireball>> Tracker;
 
+	// ABS_CPT_RB_Simulator is a helper component in case you build your game from scratch with GGNoRe
+	// If you already have your game simulation you can make GGNoRe use it with ABS_CPT_RB_Simulator::SINGLETON::SetSimulationStrategies then call TryTickingToNextFrame instead
 	class TEST_CPT_RB_Simulator final : public GGNoRe::API::ABS_CPT_RB_Simulator
 	{
 		const TEST_Fireball* PublicSelf;
