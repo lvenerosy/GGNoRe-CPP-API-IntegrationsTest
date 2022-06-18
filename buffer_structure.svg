@@ -1,0 +1,46 @@
+<svg width="840" height="96" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="translate(4, 92)">
+<title>G</title>
+<polygon fill="none" stroke="transparent" points="-4,4 -4,-92 836,-92 836,4 -4,4"/>
+<!-- buffer -->
+<g id="node1" class="node">
+<title>buffer</title>
+<polygon fill="blue" stroke="transparent" points="8,-19 8,-69 58,-69 58,-19 8,-19"/>
+<polygon fill="none" stroke="black" points="8,-19 8,-69 58,-69 58,-19 8,-19"/>
+<polygon fill="blue" stroke="transparent" points="58,-19 58,-69 108,-69 108,-19 58,-19"/>
+<polygon fill="none" stroke="black" points="58,-19 58,-69 108,-69 108,-19 58,-19"/>
+<polygon fill="blue" stroke="transparent" points="108,-19 108,-69 158,-69 158,-19 108,-19"/>
+<polygon fill="none" stroke="black" points="108,-19 108,-69 158,-69 158,-19 108,-19"/>
+<polygon fill="blue" stroke="transparent" points="158,-19 158,-69 208,-69 208,-19 158,-19"/>
+<polygon fill="none" stroke="black" points="158,-19 158,-69 208,-69 208,-19 158,-19"/>
+<polygon fill="blue" stroke="transparent" points="208,-19 208,-69 258,-69 258,-19 208,-19"/>
+<polygon fill="none" stroke="black" points="208,-19 208,-69 258,-69 258,-19 208,-19"/>
+<polygon fill="blue" stroke="transparent" points="258,-19 258,-69 308,-69 308,-19 258,-19"/>
+<polygon fill="none" stroke="black" points="258,-19 258,-69 308,-69 308,-19 258,-19"/>
+<polygon fill="blue" stroke="transparent" points="308,-19 308,-69 358,-69 358,-19 308,-19"/>
+<polygon fill="none" stroke="black" points="308,-19 308,-69 358,-69 358,-19 308,-19"/>
+<polygon fill="fuchsia" stroke="transparent" points="358,-19 358,-69 408,-69 408,-19 358,-19"/>
+<polygon fill="none" stroke="black" points="358,-19 358,-69 408,-69 408,-19 358,-19"/>
+<polygon fill="fuchsia" stroke="transparent" points="408,-19 408,-69 458,-69 458,-19 408,-19"/>
+<polygon fill="none" stroke="black" points="408,-19 408,-69 458,-69 458,-19 408,-19"/>
+<polygon fill="red" stroke="transparent" points="458,-19 458,-69 508,-69 508,-19 458,-19"/>
+<polygon fill="none" stroke="black" points="458,-19 458,-69 508,-69 508,-19 458,-19"/>
+<polygon fill="yellow" stroke="transparent" points="508,-19 508,-69 558,-69 558,-19 508,-19"/>
+<polygon fill="none" stroke="black" points="508,-19 508,-69 558,-69 558,-19 508,-19"/>
+<polygon fill="yellow" stroke="transparent" points="558,-19 558,-69 608,-69 608,-19 558,-19"/>
+<polygon fill="none" stroke="black" points="558,-19 558,-69 608,-69 608,-19 558,-19"/>
+</g>
+<!-- legend -->
+<g id="node2" class="node">
+<title>legend</title>
+<polygon fill="blue" stroke="transparent" points="642,-64 642,-84 824,-84 824,-64 642,-64"/>
+<text text-anchor="start" x="653.63" y="-69.4" font-family="Times,serif" font-size="14.00" fill="silver">RollbackBufferMaxSize = 7</text>
+<polygon fill="fuchsia" stroke="transparent" points="642,-44 642,-64 824,-64 824,-44 642,-44"/>
+<text text-anchor="start" x="643.51" y="-49.4" font-family="Times,serif" font-size="14.00" fill="silver">InputLeniencyFramesCount = 2</text>
+<polygon fill="red" stroke="transparent" points="642,-24 642,-44 824,-44 824,-24 642,-24"/>
+<text text-anchor="start" x="681.3" y="-29.4" font-family="Times,serif" font-size="14.00" fill="silver">Current tick frame</text>
+<polygon fill="yellow" stroke="transparent" points="642,-4 642,-24 824,-24 824,-4 642,-4"/>
+<text text-anchor="start" x="667.62" y="-9.4" font-family="Times,serif" font-size="14.00" fill="silver">DelayFramesCount = 2</text>
+</g>
+</g>
+</svg>
