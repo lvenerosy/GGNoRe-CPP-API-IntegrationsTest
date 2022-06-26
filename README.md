@@ -2,15 +2,27 @@
 
 Tests for the rollback module GGNoRe.
 
-# What is rollback and why your online game needs it
+# The problem
+
+Video games are made of 3 parts looping until you stop playing: poll inputs -> simulate new state -> render view. Online video games have the added constraint that you cannot poll the remote inputs for the current local frame because it takes time for them to travel the network.
+
+# The solutions
+
+- Run the local and remote clients in lockstep, with the local client waiting for the remote inputs before simulating. This delays the game by the network travel time and makes it feel sluggish because what is effectively being rendered is what happened in the past.
+- Locally extrapolating then reconciliating the state of a remote player. The caveat is that the state of a player is never exactly the same across different clients which may lead to the different players experiencing different versions of the game and disagreeing on the outcome.
+- Predict the remote inputs by assuming that they are the same as the previous frame since it is often the case. Each frame a checksum is generated from the state of the game, so when the local and remote checksums do not match, a mis-prediction occured. In order to resolve a mis-prediction, load a previous valid state of the game, aka rollbacking, and resimulate up to the current frame with the correct inputs. Rollback combines immediate responsiveness with consistency across every client.
+
+# More on rollback
 
 From the best [writeup](https://ki.infil.net/w02-netcode-p4.html) on the topic:
 
 > Rollback's main strength is that it never waits for missing input from the opponent. Instead, rollback netcode continues to run the game normally. All inputs from the local player are processed immediately, as if it was offline. Then, when input from the remote player comes in a few frames later, rollback fixes its mistakes by correcting the past. It does this in such a clever way that the local player may not even notice a large percentage of network instability, and they can play through any remaining instances with confidence that their inputs are always handled consistently.
 
+For more technical resources, check out the GDC talks from [Overwatch](https://youtu.be/W3aieHjyNvw?t=1341) and [Mortal Kombat](https://www.youtube.com/watch?v=7jb0FOcImdg).
+
 # Why use GGNoRe
 
-GGNoRe encourages a structured implementation instead of serializing/simulating everything in the same place: 1 emulator component per input generating actor, 1 simulator component per actor receiving the inputs, and 1 save states component per actor that needs to be serialized. For example a projectile or a character would have a simulator and a save state. This structure greatly helps with transitioning delay based netcode into rollback as well, in which case you may just use your simulation loop instead of the simulator component.
+GGNoRe encourages a structured implementation instead of respectively serializing/simulating everything in a single callback each, as it is usual in other implementations tailored to smaller games or emulators where it is possible to save the state of the entire game for multiple frames. This structure greatly helps with transitioning delay based netcode into rollback as well since you can simply attach components to your already existing architecture and still use your regular simulation loop.
 
 # In this repository
 
@@ -22,7 +34,7 @@ There are only the tests in order to demo the API and features. The module is in
 - Integration tests for demo purposes and manual debugging. The entirety of the module has been automatically tested with close to 250k different configurations.
 - Very well documented, namely to offer advice on use and to avoid pitfalls.
 - Manages actor lifetime with out of the box support for your game's pooling through activation/deactivation interface.
-- Supports both fixed update and updating every tick. For example you could use the ticking callback to update animation playing/player location instead of every fixed logic frame. Still, the async tick logic is locked back with the core clock when a fixed logic frame is completed, so animations/locations will match with the actual state of the game.
+- Supports both fixed update and updating every tick. For example you could use the ticking callback to update animation playing/player location instead of every fixed logic frame. Still, the async tick logic is locked back with the core clock when a fixed logic frame is completed, so animations/locations would match with the actual state of the game.
 - Possibility to periodically stall players with frame advantage, mitigating one sided rollback.
 - Possibility to periodically skip rendering frames, when punctually GPU bottlenecked for example.
 - Optimized bit buffer for the inputs packet.
