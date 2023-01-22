@@ -31,7 +31,7 @@ There are only the tests in order to demo the API and features. The module is in
 # Features
 
 - Highly configurable: delay frames count, input leniency buffer size, rollback buffer size and more.
-- Integration tests for demo purposes and manual debugging. The entirety of the module has been automatically tested with close to 250k different configurations.
+- Integration tests for demo purposes and manual debugging. The entirety of the module has been automatically tested with close to [250k different configurations](https://github.com/lvenerosy/GGNoRe-CPP-API-IntegrationsTest/blob/main/GGNoRe-CPP-API-IntegrationsTest/GGNoRe-CPP-API-IntegrationsTest.hpp#L81).
 - Very well documented, namely to offer advice on use and to avoid pitfalls.
 - Manages actor lifetime with out of the box support for your game's pooling through activation/deactivation interface.
 - Supports both fixed update and updating every tick. For example you could use the ticking callback to update animation playing/player location instead of every fixed logic frame. Still, the async tick logic is locked back with the core clock when a fixed logic frame is completed, so animations/locations would match with the actual state of the game.
