@@ -22,7 +22,7 @@ For more technical resources, check out the GDC talks from [Overwatch](https://y
 
 # Why use GGNoRe
 
-GGNoRe encourages a structured implementation instead of respectively serializing/simulating everything in a single callback each, as it is usual in other implementations tailored to smaller games or emulators where it is possible to save the state of the entire game for multiple frames. This structure greatly helps with transitioning delay based netcode into rollback as well since you can simply attach components to your already existing architecture and still use your regular simulation loop.
+GGNoRe encourages a targeted implementation instead of respectively serializing/simulating everything in a single callback each, as it is usual in other implementations tailored to smaller games or emulators where it is possible to save and resimulate the state of the entire application for multiple frames. It allows an easy pick and choose of what should be serialized and resimulated regardless of the overall execution of the application. This structure greatly helps with transitioning delay based netcode into rollback as well, since you can manage state by simply attaching components to your already existing architecture and you may still use your regular simulation loop if you can execute it multiple times per frame.
 
 # In this repository
 
@@ -41,7 +41,7 @@ There are only the tests in order to demo the API and features. The module is in
 - Built-in input transfer protocol.
 - Synchronizing with an ongoing game session.
 - Supports any number of local/remote players.
-- Resistant to some types of cheats. At runtime a server could decide what is simulated locally, using a significance manager for example, so a client would not have information that could be misused. And memory tempering cheats would desync the client since the memory content must be identical.
+- Resistant to some types of cheats. At runtime a server could decide what is simulated locally, using a significance manager for example, so a client would not have information that could be misused. And memory tampering cheats would desync the client since the memory content must be identical.
 - Although the module uses the STL containers with the default allocator, the heap memory needs are bounded by the configuration so there are no unnecessary allocations. The state serialization/deserialization is the only memory sensitive operation but in this case you may use the optimized containers coming with your engine.
 - Beside the STL everything is tailor-made for the module, there are no 3rd party libraries.
 - Detailed logs.
@@ -114,6 +114,7 @@ digraph G {
 # Logic overview
 
 - some details, such as how the delay prevents rollbacking, are omitted for clarity.
+- "activation change" refers to the start/stop of the entity's serialization/simulation.
 - "unsimulated" means that the change in activation for a component happened outside of the implementation of its simulator interface, namely `OnSimulateFrame`/`OnSimulateTick`.
 
 ## Simulation
