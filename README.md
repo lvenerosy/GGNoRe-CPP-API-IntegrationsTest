@@ -10,7 +10,7 @@ Video games are made of 3 parts looping until you stop playing: poll inputs -> s
 
 - Run the local and remote clients in lockstep, with the local client waiting for the remote inputs before simulating. This delays the game by the network travel time and makes it feel sluggish because what is effectively being rendered is what happened in the past.
 - Locally extrapolating then reconciliating the state of a remote player. The caveat is that the state of a player is never exactly the same across different clients which may lead to the different players experiencing different versions of the game and disagreeing on the outcome.
-- Predict the remote inputs by assuming that they are the same as the previous frame since it is often the case. Each frame a checksum is generated from the state of the game, so when the local and remote checksums do not match, a mis-prediction occured. In order to resolve a mis-prediction, load a previous valid state of the game, aka rollbacking, and resimulate up to the current frame with the correct inputs. Rollback combines immediate responsiveness with consistency across every client.
+- Predict the remote inputs by assuming that they are the same as the previous frame, since human beings usually do not press a different button 60 times per second. Each frame a checksum is generated from the state of the game, so when the local and remote checksums do not match, a mis-prediction occured. In order to resolve a mis-prediction, load the most recent valid state of the game, aka rollbacking, and resimulate up to the current frame with the correct inputs. Rollback combines immediate responsiveness with consistency across every client.
 
 # More on rollback
 

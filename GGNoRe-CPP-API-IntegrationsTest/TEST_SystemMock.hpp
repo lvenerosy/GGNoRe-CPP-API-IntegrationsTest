@@ -169,35 +169,145 @@ public:
 
 		bool ReadyForNextFrame = false;
 
+		GGNoRe::API::ABS_RB_Rollbackable::SINGLETON::TickHistory History;
+
 		while (!ReadyForNextFrame)
 		{
 			TestLog("____________ SYSTEM " + std::to_string(ThisPlayerIdentity.SystemIndex) + " START - TICK " + std::to_string(MockTickIndex) + " ____________");
 
-			auto Success = GGNoRe::API::SystemMultiton::GetRollbackable(ThisPlayerIdentity.SystemIndex).TryTickingToNextFrame(DeltaDurationInSeconds);
+			History.DeltaDurationInSeconds = DeltaDurationInSeconds;
+			assert(History.DeltaDurationInSeconds > 0.f);
 
-			switch (Success)
+			auto& Rollbackable = GGNoRe::API::SystemMultiton::GetRollbackable(ThisPlayerIdentity.SystemIndex);
+
+			auto Plan = Rollbackable.PreSimulation(History);
+			assert((Plan.TickSuccess != GGNoRe::API::ABS_RB_Rollbackable::SINGLETON::SimulationPlan::TickSuccess_E::DoubleSimulation));
+			assert((Plan.TickSuccess != GGNoRe::API::ABS_RB_Rollbackable::SINGLETON::SimulationPlan::TickSuccess_E::NoActiveEmulator));
+
+			// Your main loop should start here
 			{
-			case GGNoRe::API::ABS_RB_Rollbackable::SINGLETON::TickSuccess_E::DoubleSimulation:
+				auto& Simulator = GGNoRe::API::SystemMultiton::GetSimulator(ThisPlayerIdentity.SystemIndex);
+				assert(Simulator.Simulation().Stage == GGNoRe::API::I_RB_Rollbackable::SimulationStage_E::Neither);
+
+				auto& Emulator = GGNoRe::API::SystemMultiton::GetEmulator(ThisPlayerIdentity.SystemIndex);
+
+				const auto SimulateTick = [this, &Simulator, &Rollbackable](const GGNoRe::API::SER_FixedPoint DeltaDurationInSeconds, const GGNoRe::API::SER_FixedPoint DeltaDurationInSecondsConsumedPreActivationChange, const uint16_t FrameIndex)
+				{
+					assert(DeltaDurationInSeconds + DeltaDurationInSecondsConsumedPreActivationChange > 0.f);
+
+					Simulator.SimulateTick(DeltaDurationInSeconds, FrameIndex);
+
+					Rollbackable.PostTick(FrameIndex, DeltaDurationInSecondsConsumedPreActivationChange);
+				};
+
+				const auto AdvanceToNextFrame = [this, &Emulator, &Simulator, &Rollbackable](const uint16_t FrameIndex)
+				{
+					assert(FrameIndex <= Rollbackable.UnsimulatedFrameIndex());
+
+					Simulator.SimulateFrame(FrameIndex, Emulator.GetPlayerIdToInputsAtFrame(FrameIndex));
+				};
+
+				const uint16_t ResimulationFramesCount = uint16_t(Plan.SimulationFramesCount - (Plan.TickSuccess == GGNoRe::API::ABS_RB_Rollbackable::SINGLETON::SimulationPlan::TickSuccess_E::ToNext));
+				if (ResimulationFramesCount > 0)
+				{
+					const uint16_t RollbackFrameIndex = Rollbackable.UnsimulatedFrameIndex() - ResimulationFramesCount;
+
+					for (auto FrameOffset = 0; FrameOffset < ResimulationFramesCount; FrameOffset++)
+					{
+						const auto ExistingFrameIndex = RollbackFrameIndex + FrameOffset;
+
+						assert(ExistingFrameIndex < Rollbackable.UnsimulatedFrameIndex());
+
+						SimulateTick(GGNoRe::API::DATA_CFG::Get().SimulationConfiguration.FrameDurationInSeconds, 0.f, ExistingFrameIndex);
+
+						AdvanceToNextFrame(ExistingFrameIndex);
+
+						Rollbackable.PostResimulationFrame(ExistingFrameIndex, Plan.MostRecentValidFrameIndex);
+					}
+
+					if (
+						History.ConsumedDeltaDurationInSecondsFromFrameStart > 0.f &&
+						Plan.TickSuccess != GGNoRe::API::ABS_RB_Rollbackable::SINGLETON::SimulationPlan::TickSuccess_E::StallAdvantage &&
+						Plan.TickSuccess != GGNoRe::API::ABS_RB_Rollbackable::SINGLETON::SimulationPlan::TickSuccess_E::StarvedForInput
+						)
+					{
+						SimulateTick(History.ConsumedDeltaDurationInSecondsFromFrameStart, 0.f, Rollbackable.UnsimulatedFrameIndex());
+					}
+				}
+
+				if (Plan.TickSuccess == GGNoRe::API::ABS_RB_Rollbackable::SINGLETON::SimulationPlan::TickSuccess_E::StayCurrent)
+				{
+					SimulateTick(History.DeltaDurationInSeconds, History.ConsumedDeltaDurationInSecondsFromFrameStart, Rollbackable.UnsimulatedFrameIndex());
+				}
+				else if (Plan.TickSuccess == GGNoRe::API::ABS_RB_Rollbackable::SINGLETON::SimulationPlan::TickSuccess_E::ToNext)
+				{
+					const auto SimulateNewFrame = [this, &SimulateTick, &AdvanceToNextFrame, &Rollbackable](const GGNoRe::API::ABS_RB_Rollbackable::SINGLETON::TickHistory History)
+					{
+						const GGNoRe::API::SER_FixedPoint DeltaToNextFrame = GGNoRe::API::DATA_CFG::Get().SimulationConfiguration.FrameDurationInSeconds - History.ConsumedDeltaDurationInSecondsFromFrameStart;
+						assert(DeltaToNextFrame >= 0.f);
+						SimulateTick(DeltaToNextFrame, History.ConsumedDeltaDurationInSecondsFromFrameStart, Rollbackable.UnsimulatedFrameIndex());
+
+						AdvanceToNextFrame(Rollbackable.UnsimulatedFrameIndex());
+					};
+
+					SimulateNewFrame(History);
+
+					Plan = Rollbackable.PostNewFrame(Plan);
+
+					// The original plan describes how to simulate until here, then you may use the updated plan to simulate one more frame if the local client has enough excess delta time
+					// In case you cannot partition your simulation, for example if you have to know how many frames to simulate before starting the main loop,
+					// you can just use the original plan and ignore the double simulation and setting AllowDoubleSimulation to false
+					if (Plan.TickSuccess == GGNoRe::API::ABS_RB_Rollbackable::SINGLETON::SimulationPlan::TickSuccess_E::DoubleSimulation)
+					{
+						assert(GGNoRe::API::DATA_CFG::Get().SimulationConfiguration.AllowDoubleSimulation);
+
+						SimulateNewFrame({});
+
+						Plan = Rollbackable.PostNewFrame(Plan);
+					}
+				}
+			}
+			// Your main loop should end here
+
+			// Use this call instead of the main loop example in order to trigger internal asserts/logs
+			//Plan = Rollbackable.TryTickingToNextFrame(History, Plan);
+
+			Rollbackable.PostSimulation(Plan);
+
+			if (Plan.TickSuccess == GGNoRe::API::ABS_RB_Rollbackable::SINGLETON::SimulationPlan::TickSuccess_E::StayCurrent)
+			{
+				History.ConsumedDeltaDurationInSecondsFromFrameStart += DeltaDurationInSeconds;
+			}
+			else
+			{
+				History.ConsumedDeltaDurationInSecondsFromFrameStart = 0.f;
+			}
+
+			switch (Plan.TickSuccess)
+			{
+			case GGNoRe::API::ABS_RB_Rollbackable::SINGLETON::SimulationPlan::TickSuccess_E::DoubleSimulation:
 				TestLog("^^^^^^^^^^^^ SYSTEM " + std::to_string(ThisPlayerIdentity.SystemIndex) + " DOUBLE - TICK " + std::to_string(MockTickIndex) + " ^^^^^^^^^^^^");
 				assert(AllowedOutcomes.AllowDoubleSimulation);
 				break;
-			case GGNoRe::API::ABS_RB_Rollbackable::SINGLETON::TickSuccess_E::NoActiveEmulator:
+			case GGNoRe::API::ABS_RB_Rollbackable::SINGLETON::SimulationPlan::TickSuccess_E::NoActiveEmulator:
 				TestLog("^^^^^^^^^^^^ SYSTEM " + std::to_string(ThisPlayerIdentity.SystemIndex) + " NO EMULATOR - TICK " + std::to_string(MockTickIndex) + " ^^^^^^^^^^^^");
+				// IMPORTANT: there must always be at least one active emulator
+				// If you want, for example, to keep an empty server running, it should have its own emulator
 				assert(false);
 				break;
-			case GGNoRe::API::ABS_RB_Rollbackable::SINGLETON::TickSuccess_E::StallAdvantage:
+			case GGNoRe::API::ABS_RB_Rollbackable::SINGLETON::SimulationPlan::TickSuccess_E::StallAdvantage:
 				TestLog("^^^^^^^^^^^^ SYSTEM " + std::to_string(ThisPlayerIdentity.SystemIndex) + " STALLING - TICK " + std::to_string(MockTickIndex) + " ^^^^^^^^^^^^");
 				assert(AllowedOutcomes.AllowStallAdvantage);
 				break;
-			case GGNoRe::API::ABS_RB_Rollbackable::SINGLETON::TickSuccess_E::StarvedForInput:
+			case GGNoRe::API::ABS_RB_Rollbackable::SINGLETON::SimulationPlan::TickSuccess_E::StarvedForInput:
 				TestLog("^^^^^^^^^^^^ SYSTEM " + std::to_string(ThisPlayerIdentity.SystemIndex) + " STARVED - TICK " + std::to_string(MockTickIndex) + " ^^^^^^^^^^^^");
 				assert(AllowedOutcomes.AllowStarvedForInput);
 				break;
-			case GGNoRe::API::ABS_RB_Rollbackable::SINGLETON::TickSuccess_E::StayCurrent:
+			case GGNoRe::API::ABS_RB_Rollbackable::SINGLETON::SimulationPlan::TickSuccess_E::StayCurrent:
 				TestLog("^^^^^^^^^^^^ SYSTEM " + std::to_string(ThisPlayerIdentity.SystemIndex) + " STAY - TICK " + std::to_string(MockTickIndex) + " ^^^^^^^^^^^^");
 				assert(AllowedOutcomes.AllowStayCurrent);
 				break;
-			case GGNoRe::API::ABS_RB_Rollbackable::SINGLETON::TickSuccess_E::ToNext:
+			case GGNoRe::API::ABS_RB_Rollbackable::SINGLETON::SimulationPlan::TickSuccess_E::ToNext:
 				TestLog("^^^^^^^^^^^^ SYSTEM " + std::to_string(ThisPlayerIdentity.SystemIndex) + " NEXT - TICK " + std::to_string(MockTickIndex) + " ^^^^^^^^^^^^");
 				break;
 			default:
