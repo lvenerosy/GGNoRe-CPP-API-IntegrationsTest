@@ -1,16 +1,37 @@
 # GGNoRe-CPP-API-IntegrationsTest
 
-Tests for the rollback module GGNoRe.
+Tests and documentation for the rollback module GGNoRe.
 
 # The problem
 
-Video games are made of 3 parts looping until you stop playing: poll inputs -> simulate new state -> render view. Online video games have the added constraint that you cannot poll the remote inputs for the current local frame because it takes time for them to travel the network.
+Online video games are made of 3 parts looping until you stop playing:
+1. poll local and **remote** inputs
+2. simulate new state
+3. render frame
+But you cannot poll the **remote** inputs for the current local frame because it takes time for them to travel the network.
 
 # The solutions
 
-- Run the local and remote clients in lockstep, with the local client waiting for the remote inputs before simulating. This delays the game by the network travel time and makes it feel sluggish because what is effectively being rendered is what happened in the past.
-- Locally extrapolating then reconciliating the state of a remote player. The caveat is that the state of a player is never exactly the same across different clients which may lead to the different players experiencing different versions of the game and disagreeing on the outcome.
-- Predict the remote inputs by assuming that they are the same as the previous frame, since human beings usually do not press a different button 60 times per second. Each frame a checksum is generated from the state of the game, so when the local and remote checksums do not match, a mis-prediction occured. In order to resolve a mis-prediction, load the most recent valid state of the game, aka rollbacking, and resimulate up to the current frame with the correct inputs. Rollback combines immediate responsiveness with consistency across every client.
+- Local client in **lockstep** with remote client:
+  1. poll local inputs
+  2. the game stalls in order to wait for the remote inputs
+  3. simulate and render the frame corresponding with the network travel time delay
+Caveats: **lockstep** delays the game by the network travel time and makes it feel sluggish because what is effectively being rendered is what happened in the past.
+- Extrapolating then reconciliating the state of a remote player:
+  1. poll local inputs
+  2. when receiving new information about the remote player state
+    - then reconciliate by interpolating between the new information and the faked state
+    - otherwise extrapolate according to the most up to date information
+Caveats: the state of a player is never exactly the same across different clients which may lead to the different players experiencing different versions of the game and disagreeing on the outcome.
+- **Rollback** combines immediate responsiveness with consistency across every client:
+  1. poll local inputs
+  2. predict the remote inputs (usually by assuming that they are the same as the previous frame, since human beings usually do not press a different button 60 times per second)
+  3. generate a checksum from the state of the game
+  4. receive the remote inputs and checksum
+  5. if the checksum does not match with the local client, we know a mis-prediction occured
+    - then load the most recent valid state of the game, aka **rollbacking**, and resimulate up to the current frame with the correct inputs
+    - otherwise the prediction was correct and the simulation can continue without delay
+Caveats: the part of your game that needs to be rolled back must be fully deterministic, meaning that for given inputs and initial conditions, the simulation outputs the exact same result. This may be impossible for games with complex physics, but many other possibly non deterministic features, such as particles, are not an issue since they are not integral to the outcome of the simulation. Furthermore, your game simulation must be performant enough to run multiple times per frame.
 
 # More on rollback
 
@@ -22,11 +43,12 @@ For more technical resources, check out the GDC talks from [Overwatch](https://y
 
 # Why use GGNoRe
 
-GGNoRe encourages a targeted implementation instead of respectively serializing/simulating everything in a single callback each, as it is usual in other implementations tailored to smaller games or emulators where it is possible to save and resimulate the state of the entire application for multiple frames. It allows an easy pick and choose of what should be serialized and resimulated regardless of the overall execution of the application. This structure greatly helps with transitioning delay based netcode into rollback as well, since you can manage state by simply attaching components to your already existing architecture and you may still use your regular simulation loop if you can execute it multiple times per frame.
+- component architecture instead of respectively serializing/simulating everything in a single callback each
+- supports transitioning delay based netcode into rollback since you can manage state by simply attaching components to your already existing architecture, and you still may use your regular simulation loop if you can execute it multiple times per frame
 
 # In this repository
 
-There are only the tests in order to demo the API and features. The module is in a private repository (see Licensing section at the bottom).
+There are only the tests in order to demo the API and features, as well as the documentation. The module is in a private repository (see Licensing section at the bottom).
 
 # Features
 
@@ -51,11 +73,6 @@ There are only the tests in order to demo the API and features. The module is in
 - Can force rollback in order to test if your game still works in the worst case scenario.
 - Mock remote players locally.
 - Static library but can easily be turned into a dynamic one.
-
-# Caveats
-
-- Your game must be fully deterministic, meaning that for given inputs and initial conditions, the simulation outputs the exact same result. This may be impossible for games with complex physics.
-- Your game simulation must be performant enough to run multiple times per frame.
 
 # Building
 
