@@ -70,10 +70,19 @@ For more technical resources, check out the GDC talks from [Overwatch](https://y
 
 There are only the tests in order to demo the API and features, as well as the documentation. The module is in a private repository (see Licensing section at the bottom).
 
+What is in the testing code:
+- the entirety of the module is automatically tested with close to [250k different configurations](https://github.com/lvenerosy/GGNoRe-CPP-API-IntegrationsTest/blob/main/GGNoRe-CPP-API-IntegrationsTest/GGNoRe-CPP-API-IntegrationsTest.hpp#L81-L100)
+- compute [situations](https://github.com/lvenerosy/GGNoRe-CPP-API-IntegrationsTest/blob/main/GGNoRe-CPP-API-IntegrationsTest/GGNoRe-CPP-API-IntegrationsTest.cpp#L19-L44) to ensure that the test unfolds in a way that corresponds to the configuration
+- a [player class](https://github.com/lvenerosy/GGNoRe-CPP-API-IntegrationsTest/blob/main/GGNoRe-CPP-API-IntegrationsTest/TEST_Player.hpp#L29-L31) showing how to use the components
+- a [fireball class](https://github.com/lvenerosy/GGNoRe-CPP-API-IntegrationsTest/blob/main/GGNoRe-CPP-API-IntegrationsTest/TEST_Fireball.hpp#L23-L25) spawned by the player class through preset inputs in order to test proper lifetime management when rollbacking before spawn/despawn
+- a [mock class](https://github.com/lvenerosy/GGNoRe-CPP-API-IntegrationsTest/blob/main/GGNoRe-CPP-API-IntegrationsTest/TEST_SystemMock.hpp#L39) that represents a client which manages a local/remote players pair's activations and inputs transfers according to the configuration
+- an example of how a [main loop](https://github.com/lvenerosy/GGNoRe-CPP-API-IntegrationsTest/blob/main/GGNoRe-CPP-API-IntegrationsTest/TEST_SystemMock.hpp#L178-L284) could be implemented/modified in your engine in order to support GGNoRe
+
+
 ## Features
 
 - Highly configurable: delay frames count, input leniency buffer size, rollback buffer size and more.
-- Integration tests for demo purposes and manual debugging. The entirety of the module has been automatically tested with close to [250k different configurations](https://github.com/lvenerosy/GGNoRe-CPP-API-IntegrationsTest/blob/main/GGNoRe-CPP-API-IntegrationsTest/GGNoRe-CPP-API-IntegrationsTest.hpp#L81).
+- Integration tests for demo purposes and manual debugging.
 - Very well documented, namely to offer advice on use and to avoid pitfalls.
 - Manages actor lifetime with out of the box support for your game's pooling through activation/deactivation interface.
 - Supports both fixed update and updating every tick. For example you could use the ticking callback to update animation playing/player location instead of every fixed logic frame. Still, the async tick logic is locked back with the core clock when a fixed logic frame is completed, so animations/locations would match with the actual state of the game.
@@ -89,7 +98,7 @@ There are only the tests in order to demo the API and features, as well as the d
 - Detailed logs.
 - [Offensive programming](https://en.wikipedia.org/wiki/Offensive_programming) style so no bugs go through unnoticed.
 - Lean API, only what you need to use is exposed.
-- Internally uses fixed point to ensure serialization consistency.
+- Internally uses fixed point to ensure determinism.
 - Can force rollback in order to test if your game still works in the worst case scenario.
 - Mock remote players locally.
 - Static library but can easily be turned into a dynamic one.
