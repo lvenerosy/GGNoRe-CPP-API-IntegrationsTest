@@ -2,7 +2,22 @@
 
 Tests and documentation for the rollback module GGNoRe.
 
-# The problem
+- [The problem](#The-problem)
+- [The solutions](#The-solutions)
+- [More on rollback](#More-on-rollback)
+- [Why use GGNoRe](#Why-use-GGNoRe)
+- [In this repository](#In-this-repository)
+- [Features](#Features)
+- [Building](#Building)
+  - [Windows](##Windows)
+  - [Others](##Others)
+- [Buffer structure example](#Buffer-structure-example)
+- [Logic overview](#Logic-overview)
+  - [Simulation](##Simulation)
+  - [Rollback](##Rollback)
+- [TBD](#TBD)
+
+## The problem
 
 Online video games are made of 3 parts looping until you stop playing:
 1. poll local and **remote** inputs
@@ -10,30 +25,35 @@ Online video games are made of 3 parts looping until you stop playing:
 3. render frame
 But you cannot poll the **remote** inputs for the current local frame because it takes time for them to travel the network.
 
-# The solutions
+## The solutions
 
 - Local client in **lockstep** with remote client:
   1. poll local inputs
   2. the game stalls in order to wait for the remote inputs
   3. simulate and render the frame corresponding with the network travel time delay
+
 Caveats: **lockstep** delays the game by the network travel time and makes it feel sluggish because what is effectively being rendered is what happened in the past.
+
 - Extrapolating then reconciliating the state of a remote player:
   1. poll local inputs
   2. when receiving new information about the remote player state
-    - then reconciliate by interpolating between the new information and the faked state
-    - otherwise extrapolate according to the most up to date information
+      - then reconciliate by interpolating between the new information and the faked state
+      - otherwise extrapolate according to the most up to date information
+
 Caveats: the state of a player is never exactly the same across different clients which may lead to the different players experiencing different versions of the game and disagreeing on the outcome.
+
 - **Rollback** combines immediate responsiveness with consistency across every client:
   1. poll local inputs
   2. predict the remote inputs (usually by assuming that they are the same as the previous frame, since human beings usually do not press a different button 60 times per second)
   3. generate a checksum from the state of the game
   4. receive the remote inputs and checksum
   5. if the checksum does not match with the local client, we know a mis-prediction occured
-    - then load the most recent valid state of the game, aka **rollbacking**, and resimulate up to the current frame with the correct inputs
-    - otherwise the prediction was correct and the simulation can continue without delay
+      - then load the most recent valid state of the game, aka **rollbacking**, and resimulate up to the current frame with the correct inputs
+      - otherwise the prediction was correct and the simulation can continue without delay
+
 Caveats: the part of your game that needs to be rolled back must be fully deterministic, meaning that for given inputs and initial conditions, the simulation outputs the exact same result. This may be impossible for games with complex physics, but many other possibly non deterministic features, such as particles, are not an issue since they are not integral to the outcome of the simulation. Furthermore, your game simulation must be performant enough to run multiple times per frame.
 
-# More on rollback
+## More on rollback
 
 From the best [writeup](https://ki.infil.net/w02-netcode-p4.html) on the topic:
 
@@ -41,16 +61,16 @@ From the best [writeup](https://ki.infil.net/w02-netcode-p4.html) on the topic:
 
 For more technical resources, check out the GDC talks from [Overwatch](https://youtu.be/W3aieHjyNvw?t=1341) and [Mortal Kombat](https://www.youtube.com/watch?v=7jb0FOcImdg).
 
-# Why use GGNoRe
+## Why use GGNoRe
 
 - component architecture instead of respectively serializing/simulating everything in a single callback each
 - supports transitioning delay based netcode into rollback since you can manage state by simply attaching components to your already existing architecture, and you still may use your regular simulation loop if you can execute it multiple times per frame
 
-# In this repository
+## In this repository
 
 There are only the tests in order to demo the API and features, as well as the documentation. The module is in a private repository (see Licensing section at the bottom).
 
-# Features
+## Features
 
 - Highly configurable: delay frames count, input leniency buffer size, rollback buffer size and more.
 - Integration tests for demo purposes and manual debugging. The entirety of the module has been automatically tested with close to [250k different configurations](https://github.com/lvenerosy/GGNoRe-CPP-API-IntegrationsTest/blob/main/GGNoRe-CPP-API-IntegrationsTest/GGNoRe-CPP-API-IntegrationsTest.hpp#L81).
@@ -74,17 +94,17 @@ There are only the tests in order to demo the API and features, as well as the d
 - Mock remote players locally.
 - Static library but can easily be turned into a dynamic one.
 
-# Building
+## Building
 
-## Windows
+### Windows
 
 There is a sln for the VS2019 toolchain.
 
-## Others
+### Others
 
 Since there is very little platform specific code, all contained within `GGNoRe-CPP-API/Core/Build.hpp`, and since I exclusively use standard C++14, it should be cross-platform as well as any compiler friendly.
 
-# Buffer structure example
+## Buffer structure example
 
 This is an example, the actual values depend on how you configure the module.
 
@@ -128,13 +148,13 @@ digraph G {
 - rollback is possible up to `Current tick frame - RollbackBufferMaxSize`.
 - generating an input at `Current tick frame` saves it to `Current tick frame + DelayFramesCount`.
 
-# Logic overview
+## Logic overview
 
 - some details, such as how the delay prevents rollbacking, are omitted for clarity.
 - "activation change" refers to the start/stop of the entity's serialization/simulation.
 - "unsimulated" means that the change in activation for a component happened outside of the implementation of its simulator interface, namely `OnSimulateFrame`/`OnSimulateTick`.
 
-## Simulation
+### Simulation
 
 Configured with a logic frame time of 16.6ms.
 
@@ -149,7 +169,7 @@ Configured with a logic frame time of 16.6ms.
 |1|Unsimulated|2.4|
 |1|Serialize state|2.4|
 
-## Rollback
+### Rollback
 
 |Frame|Instruction|
 |-|-|
@@ -162,7 +182,7 @@ Configured with a logic frame time of 16.6ms.
 |1|Deserialize state of frame 0|
 |0|Resimulate|
 
-# TBD
+## TBD
 
 - Visual debug inspector.
 - Unreal Engine 4/5 plugins.
@@ -170,6 +190,6 @@ Configured with a logic frame time of 16.6ms.
 - At the moment every player of a session must use the same frame buffer configuration (delay, leniency...). In the future, it might be configurable per player.
 - Variable rollback buffer size.
 
-# Licensing
+## Licensing
 
 Contact me: contact@erebnyx.com
